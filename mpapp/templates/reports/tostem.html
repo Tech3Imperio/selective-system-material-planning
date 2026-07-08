@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon %}
+{% block title %}Tostem Requisition — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Tostem Requisition</h1>
+    <p class="page-sub">Tostem-supplied materials are requested via this requisition — never on a vendor PO
+      (FR-O2). To accompany the Tostem window order, placed outside this system.</p>
+  </div>
+  <div class="page-actions no-print">
+    <a class="btn btn-ghost" href="{{ url_for('reports.index', project_id=project['id']) }}">Back to reports</a>
+    <button onclick="window.print()" class="btn btn-primary">{{ icon('print', 14) }}Print / Save PDF</button>
+  </div>
+</div>
+
+<div class="print-sheet">
+  {# Letterhead #}
+  <header class="letterhead">
+    <div class="who">
+      <div class="logo-mark lg">SS</div>
+      <div>
+        <div class="co">{{ company_name }}</div>
+        <div class="co-sub">Authorised Tostem Partner · Aluminium Windows</div>
+      </div>
+    </div>
+    <div class="doc">
+      <div class="doc-title">Material Requisition</div>
+      <div class="doc-meta">{{ today | ddmmyyyy }}</div>
+    </div>
+  </header>
+
+  {# Project block #}
+  {% set tostem_refs = window_lines | map(attribute='tostem_order_ref') | select | unique | list %}
+  <dl class="sheet-block">
+    <div class="kv"><dt>Project</dt><dd>{{ project['name'] }}</dd></div>
+    <div class="kv"><dt>Client</dt><dd>{{ project['client_name'] }}</dd></div>
+    <div class="kv"><dt>Tostem order ref</dt><dd>{{ tostem_refs | join(' / ') if tostem_refs else '—' }}</dd></div>
+    <div class="kv"><dt>Delivery to</dt><dd>{{ project['site_address'] or '—' }}</dd></div>
+    <div class="kv"><dt>Requested by</dt><dd>____________________</dd></div>
+    <div class="kv"><dt>Required by</dt><dd>____________________</dd></div>
+  </dl>
+
+  {# Section 1: Tostem-supplied totals #}
+  <h3 class="sheet-h">1 · Tostem-supplied materials</h3>
+  <table class="sheet-tbl">
+    <thead>
+      <tr><th>#</th><th>Material</th><th class="num">Quantity</th><th>UoM</th></tr>
+    </thead>
+    <tbody>
+      {% for t in totals %}
+      <tr>
+        <td style="color:var(--slate-500)">{{ loop.index }}</td>
+        <td style="font-weight:500;color:var(--slate-900)">{{ t['material_name'] }}</td>
+        <td class="num" style="font-weight:600;color:var(--slate-900)">{{ t['total_qty'] | qty }}</td>
+        <td>{{ t['uom'] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">No Tostem-supplied requirement lines entered yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if lines %}
+  <h3 class="sheet-h">2 · Requirement detail lines</h3>
+  <table class="sheet-tbl">
+    <thead>
+      <tr><th>Material</th><th class="num">Qty</th><th>UoM</th><th>Basis</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for l in lines %}
+      <tr>
+        <td style="font-weight:500;color:var(--slate-900)">{{ l['material_name'] }}</td>
+        <td class="num">{{ l['required_qty'] | qty }}</td>
+        <td>{{ l['uom'] }}</td>
+        <td>{{ l['basis_note'] or '—' }}</td>
+        <td>{{ l['status'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {# Window schedule summary #}
+  <h3 class="sheet-h">{{ '3' if lines else '2' }} · Window schedule summary</h3>
+  <table class="sheet-tbl">
+    <thead>
+      <tr><th>Configuration</th><th>Description</th><th class="num">Opening lines</th><th class="num">Windows</th></tr>
+    </thead>
+    <tbody>
+      {% for c in summary['per_config'] %}
+      <tr>
+        <td style="font-weight:500;color:var(--slate-900)">{{ c['code'] }}</td>
+        <td>{{ c['name'] }}</td>
+        <td class="num">{{ c['line_count'] }}</td>
+        <td class="num">{{ c['window_count'] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">No window lines.</td></tr>
+      {% endfor %}
+      {% if summary['per_config'] %}
+      <tr>
+        <td colspan="2" style="font-weight:600;color:var(--slate-900)">Total</td>
+        <td class="num" style="font-weight:600;color:var(--slate-900)">{{ summary['line_count'] }}</td>
+        <td class="num" style="font-weight:600;color:var(--slate-900)">{{ summary['window_count'] }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  {% if window_lines %}
+  <h3 class="sheet-h">Appendix · Window schedule</h3>
+  <table class="sheet-tbl">
+    <thead>
+      <tr><th>Opening ref</th><th>Config</th><th class="num">Width (mm)</th>
+          <th class="num">Height (mm)</th><th class="num">Qty</th><th>Tostem order ref</th></tr>
+    </thead>
+    <tbody>
+      {% for w in window_lines %}
+      <tr>
+        <td style="font-weight:500;color:var(--slate-900)">{{ w['opening_ref'] }}</td>
+        <td>{{ w['config_code'] }}</td>
+        <td class="num">{{ w['width_mm'] | qty }}</td>
+        <td class="num">{{ w['height_mm'] | qty }}</td>
+        <td class="num">{{ w['quantity'] }}</td>
+        <td>{{ w['tostem_order_ref'] or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <p class="sheet-note">
+    Note: quantities above are requested against the referenced Tostem window order and include no wastage
+    allowance. Please supply the listed materials with the window units and confirm the dispatch date
+    against the required-by date above.
+  </p>
+
+  {# Signatures #}
+  <div class="sig-grid">
+    <div>Prepared by</div>
+    <div>Approved by (Owner)</div>
+    <div>Received by Tostem</div>
+  </div>
+</div>
+{% endblock %}

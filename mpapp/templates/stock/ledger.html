@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, badge %}
+{% block title %}Stock — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Stock Ledger</h1>
+    <p class="page-sub">Per-project site store (A3). On hand is always derived from the ledger, never stored.</p>
+  </div>
+  <div class="page-actions no-print">
+    <a class="btn" href="{{ url_for('stock.export_csv', project_id=project['id'],
+                        material_id=filters['material_id'], date_from=filters['date_from'],
+                        date_to=filters['date_to']) }}">{{ icon('download', 14) }}Export CSV</a>
+    <a class="btn" href="#movement-receipt">{{ icon('stock', 14) }}Record receipt</a>
+    <a class="btn" href="#movement-adjust">{{ icon('warn', 14) }}Adjustment</a>
+    <a class="btn btn-primary" href="#movement-issue">{{ icon('upload', 14) }}Issue stock</a>
+  </div>
+</div>
+
+{# On-hand balances #}
+{% if balances %}
+<div class="balance-grid">
+  {% for b in balances %}
+  <div class="balance-card" title="{{ b['name'] }}{% if b['supply_source'] == 'Tostem-supplied' %} (Tostem-supplied){% endif %}">
+    <div class="m">{{ b['name'] }}</div>
+    <div class="v">{{ b['on_hand'] | qty }} <small>{{ b['uom'] }}</small></div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# Movement forms #}
+<div class="grid-3 mb-16 no-print">
+  <div class="card" id="movement-receipt" style="margin-top:0">
+    <div class="card-header"><h2 class="card-title">Direct receipt</h2></div>
+    <div class="card-body">
+      <p class="muted" style="margin:0 0 10px">No PO — e.g. Tostem gaskets arriving with the windows (FR-S2).
+        PO deliveries are received from the PO page.</p>
+      <form method="post" action="{{ url_for('stock.direct_receipt', project_id=project['id']) }}" class="form-stack wide">
+        <label class="field">
+          <span class="field-label">Material<span class="req">*</span></span>
+          <select id="dr_material" name="material_id" required>
+            <option value="">— select —</option>
+            {% for m in materials %}
+              <option value="{{ m['id'] }}">{{ m['name'] }} ({{ m['uom'] }}{% if m['supply_source'] == 'Tostem-supplied' %}, Tostem-supplied{% endif %})</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Quantity received<span class="req">*</span></span>
+          <input type="text" id="dr_qty" name="qty" required inputmode="decimal">
+        </label>
+        <label class="field">
+          <span class="field-label">Date</span>
+          <input type="date" id="dr_date" name="date" value="{{ today }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Note</span>
+          <input type="text" id="dr_note" name="note" placeholder="e.g. arrived with Tostem window shipment">
+        </label>
+        <div><button type="submit" class="btn">Record direct receipt</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card" id="movement-issue" style="margin-top:0">
+    <div class="card-header"><h2 class="card-title">Issue stock</h2></div>
+    <div class="card-body">
+      <p class="muted" style="margin:0 0 10px">Consumption at site — blocked if it would exceed on-hand (FR-S5).</p>
+      <form method="post" action="{{ url_for('stock.issue', project_id=project['id']) }}" class="form-stack wide">
+        <label class="field">
+          <span class="field-label">Material<span class="req">*</span></span>
+          <select id="is_material" name="material_id" required>
+            <option value="">— select —</option>
+            {% for m in materials %}
+              <option value="{{ m['id'] }}">{{ m['name'] }} ({{ m['uom'] }})</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Quantity issued<span class="req">*</span></span>
+          <input type="text" id="is_qty" name="qty" required inputmode="decimal">
+        </label>
+        <label class="field">
+          <span class="field-label">Date</span>
+          <input type="date" id="is_date" name="date" value="{{ today }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Note</span>
+          <input type="text" id="is_note" name="note">
+        </label>
+        <div><button type="submit" class="btn btn-primary">Record issue</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card" id="movement-adjust" style="margin-top:0">
+    <div class="card-header"><h2 class="card-title">Adjustment</h2></div>
+    <div class="card-body">
+      <p class="muted" style="margin:0 0 10px">± correction; a reason is mandatory (FR-S3).</p>
+      <form method="post" action="{{ url_for('stock.adjust', project_id=project['id']) }}" class="form-stack wide">
+        <label class="field">
+          <span class="field-label">Material<span class="req">*</span></span>
+          <select id="ad_material" name="material_id" required>
+            <option value="">— select —</option>
+            {% for m in materials %}
+              <option value="{{ m['id'] }}">{{ m['name'] }} ({{ m['uom'] }})</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Quantity<span class="req">*</span></span>
+          <input type="text" id="ad_qty" name="qty" required inputmode="decimal">
+          <span class="hint">Use minus for reductions, e.g. -2</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Date</span>
+          <input type="date" id="ad_date" name="date" value="{{ today }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Reason<span class="req">*</span></span>
+          <input type="text" id="ad_reason" name="reason" required placeholder="e.g. breakage during handling">
+        </label>
+        <div><button type="submit" class="btn">Record adjustment</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# Filter bar #}
+<form method="get" class="filter-bar no-print">
+  <label class="field w-44">
+    <span class="field-label">Material</span>
+    <select id="material_id" name="material_id">
+      <option value="">All materials</option>
+      {% for m in materials %}
+        <option value="{{ m['id'] }}" {% if filters['material_id'] == m['id']|string %}selected{% endif %}>{{ m['name'] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field w-36">
+    <span class="field-label">From</span>
+    <input type="date" id="date_from" name="date_from" value="{{ filters['date_from'] }}">
+  </label>
+  <label class="field w-36">
+    <span class="field-label">To</span>
+    <input type="date" id="date_to" name="date_to" value="{{ filters['date_to'] }}">
+  </label>
+  <button type="submit" class="btn">{{ icon('filter', 14) }}Apply</button>
+</form>
+
+{# Ledger table #}
+{% set type_badge = {'Receipt': 'approved', 'Issue': 'issued', 'Adjustment': 'partial'} %}
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr><th>Date</th><th>Type</th><th>Material</th><th class="num">Qty</th><th>UoM</th>
+            <th>PO / source</th><th>Reason / notes</th></tr>
+      </thead>
+      <tbody>
+        {% for t in transactions %}
+        <tr>
+          <td class="cell-muted" style="white-space:nowrap">{{ t['date'] | ddmmyyyy }}</td>
+          <td>{{ badge(type_badge.get(t['type'], 'draft'), t['type']) }}</td>
+          <td class="cell-strong">{{ t['material_name'] }}</td>
+          <td class="num {{ 'qty-pos' if t['qty'] > 0 else 'qty-neg' }}">{{ '+' if t['qty'] > 0 }}{{ t['qty'] | qty }}</td>
+          <td class="cell-muted">{{ t['uom'] }}</td>
+          <td>
+            {% if t['po_number'] %}
+              <a class="link-ref" href="{{ url_for('orders.detail', po_id=t['po_id']) }}">{{ t['po_number'] }}</a>
+            {% elif t['type'] == 'Receipt' %}
+              {{ badge('tostem', 'Direct receipt') }}
+            {% else %}
+              <span class="cell-dim">—</span>
+            {% endif %}
+          </td>
+          <td class="cell-note">{{ t['reason_notes'] or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="cell-muted">No transactions.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="tbl-foot">
+    <span>Receipts against a PO are recorded from the PO page.</span>
+    <span>{{ transactions | length }} transactions</span>
+  </div>
+</div>
+
+<div class="banner banner-info mt-12">
+  {{ icon('warn', 14) }}
+  <div>Issues beyond on-hand are blocked (FR-S5) · adjustments require a reason (FR-S3) ·
+    over-receipt against a PO warns before posting (FR-S1).</div>
+</div>
+{% endblock %}

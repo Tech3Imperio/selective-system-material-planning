@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, badge %}
+{% block title %}Material catalog{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Material &amp; tool catalog</h1>
+    <p class="page-sub">Deactivated items are hidden from new-entry forms but preserved in all historical
+      records (FR-C3). Tostem-supplied materials can never be placed on a vendor PO.</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('catalog.materials', show_inactive=0 if show_inactive else 1) }}">
+      {{ 'Hide' if show_inactive else 'Show' }} deactivated</a>
+    <a class="btn btn-primary" href="{{ url_for('catalog.material_new') }}">{{ icon('plus', 14) }}New catalog item</a>
+  </div>
+</div>
+
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr><th>Name</th><th>Type</th><th>Category</th><th>UoM</th><th>Supply source</th>
+            <th>Default vendor</th><th>Active</th><th style="width:100px"></th></tr>
+      </thead>
+      <tbody>
+        {% for m in materials %}
+        <tr>
+          <td class="cell-strong">{{ m['name'] }}</td>
+          <td>{{ badge('auto' if m['item_type'] == 'Tool' else 'manual', m['item_type']) }}</td>
+          <td class="cell-muted">{{ m['category'] }}</td>
+          <td class="cell-muted">{{ m['uom'] }}</td>
+          <td>
+            {% if m['supply_source'] == 'Tostem-supplied' %}
+              {{ badge('tostem', 'Tostem-supplied') }}
+            {% else %}
+              <span class="cell-muted">Vendor-procured</span>
+            {% endif %}
+          </td>
+          <td class="cell-muted">{{ m['vendor_name'] or '—' }}</td>
+          <td>{{ badge('approved', 'Active') if m['active'] else badge('closed', 'Inactive') }}</td>
+          <td>
+            <div class="row-actions">
+              <a class="icon-btn" title="Edit" href="{{ url_for('catalog.material_edit', material_id=m['id']) }}">{{ icon('edit', 14) }}</a>
+              <form method="post" class="inline" action="{{ url_for('catalog.material_toggle', material_id=m['id']) }}">
+                <button type="submit" class="btn btn-ghost btn-xs">{{ 'Deactivate' if m['active'] else 'Reactivate' }}</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

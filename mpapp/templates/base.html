@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Material Planning{% endblock %} — {{ company_name }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+{% from '_ui.html' import icon, badge, status_badge %}
+{# Resolve the project context for the sidebar: project pages pass `project`,
+   PO pages pass `po` (which carries project_id / project_name), and the PO
+   register passes `projects` + a `project_id` filter. #}
+{% set _nav = namespace(proj=None) %}
+{% if project is defined and project %}
+  {% set _nav.proj = project %}
+{% elif po is defined and po %}
+  {% set _nav.proj = {'id': po['project_id'], 'name': po['project_name']} %}
+{% elif projects is defined and project_id is defined and project_id %}
+  {% for p in projects %}
+    {% if p['id'] | string == project_id | string %}{% set _nav.proj = p %}{% endif %}
+  {% endfor %}
+{% endif %}
+{% set proj = _nav.proj %}
+{% set ep = request.endpoint or '' %}
+{% set active =
+  'coverage' if ep in ('projects.overview', 'reports.coverage_report')
+  else 'windows' if ep.startswith('windows.')
+  else 'glass' if ep.startswith('glass.')
+  else 'materials' if ep.startswith('requirements.') or ep == 'reports.requirement_report'
+  else 'tools' if ep.startswith('tools.')
+  else 'requisition' if ep == 'reports.tostem_requisition'
+  else 'po' if ep.startswith('orders.')
+  else 'stock' if ep.startswith('stock.')
+  else 'reports' if ep.startswith('reports.')
+  else 'catalog' if ep.startswith('catalog.material')
+  else 'vendors' if ep.startswith('catalog.vendor')
+  else 'configs' if ep.startswith('catalog.config')
+  else 'settings' if ep == 'auth.settings'
+  else 'projects' %}
+<body>
+<div class="shell">
+  <aside class="sidebar no-print">
+    <div class="sidebar-logo">
+      <div class="logo-mark">SS</div>
+      <div>
+        <div class="app-name">{{ company_name }}</div>
+        <div class="app-sub">Material Planning</div>
+      </div>
+    </div>
+
+    {% if proj %}
+    <a class="sidebar-project" href="{{ url_for('projects.list_projects') }}" title="Switch project">
+      <div class="label">Project</div>
+      <div class="name"><span>{{ proj['name'] }}</span>{{ icon('chevron', 12) }}</div>
+    </a>
+    {% endif %}
+
+    <nav class="sidebar-nav">
+      {% if proj %}
+      <a class="nav-item {{ 'active' if active == 'coverage' }}" href="{{ url_for('projects.overview', project_id=proj['id']) }}">{{ icon('dashboard') }}Coverage</a>
+      <a class="nav-item {{ 'active' if active == 'windows' }}" href="{{ url_for('windows.list_windows', project_id=proj['id']) }}">{{ icon('window') }}Window Schedule</a>
+      <a class="nav-item {{ 'active' if active == 'glass' }}" href="{{ url_for('glass.sheet', project_id=proj['id']) }}">{{ icon('upload') }}Glass Sheet</a>
+      <a class="nav-item {{ 'active' if active == 'materials' }}" href="{{ url_for('requirements.list_requirements', project_id=proj['id']) }}">{{ icon('list') }}Materials</a>
+      <a class="nav-item {{ 'active' if active == 'tools' }}" href="{{ url_for('tools.list_tools', project_id=proj['id']) }}">{{ icon('settings') }}Tools</a>
+      <a class="nav-item {{ 'active' if active == 'po' }}" href="{{ url_for('orders.register', project_id=proj['id']) }}">{{ icon('po') }}Purchase Orders</a>
+      <a class="nav-item {{ 'active' if active == 'requisition' }}" href="{{ url_for('reports.tostem_requisition', project_id=proj['id']) }}">{{ icon('print') }}Tostem Requisition</a>
+      <a class="nav-item {{ 'active' if active == 'stock' }}" href="{{ url_for('stock.ledger', project_id=proj['id']) }}">{{ icon('stock') }}Stock</a>
+      <a class="nav-item {{ 'active' if active == 'reports' }}" href="{{ url_for('reports.index', project_id=proj['id']) }}">{{ icon('report') }}Reports</a>
+      {% else %}
+      <a class="nav-item {{ 'active' if active == 'projects' }}" href="{{ url_for('projects.list_projects') }}">{{ icon('dashboard') }}Projects</a>
+      {% endif %}
+      <div class="nav-section">Setup</div>
+      <a class="nav-item {{ 'active' if active == 'catalog' }}" href="{{ url_for('catalog.materials') }}">{{ icon('catalog') }}Material Catalog</a>
+      <a class="nav-item {{ 'active' if active == 'vendors' }}" href="{{ url_for('catalog.vendors') }}">{{ icon('vendor') }}Vendors</a>
+      <a class="nav-item {{ 'active' if active == 'configs' }}" href="{{ url_for('catalog.configs') }}">{{ icon('window') }}Window Configs</a>
+      {% if not proj %}
+      <a class="nav-item {{ 'active' if active == 'po' }}" href="{{ url_for('orders.register') }}">{{ icon('po') }}PO Register</a>
+      {% endif %}
+      <a class="nav-item {{ 'active' if active == 'settings' }}" href="{{ url_for('auth.settings') }}">{{ icon('settings') }}Settings</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <span>Phase 1 · manual planning</span>
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <button type="submit">Log out</button>
+      </form>
+    </div>
+  </aside>
+
+  <div class="main-col">
+    <header class="topbar no-print">
+      <div>
+        <div class="topbar-title">
+          {% if proj %}
+            <h2>{{ proj['name'] }}</h2>
+            {% if proj['status'] %}{{ status_badge(proj['status']) }}{% endif %}
+            {% if proj['archived'] %}{{ badge('closed', 'Archived') }}{% endif %}
+          {% else %}
+            <h2>{{ company_name }} — Material Planning</h2>
+          {% endif %}
+        </div>
+        {% if proj and proj['client_name'] %}
+        <div class="topbar-sub">
+          {{ proj['client_name'] }}{% if proj['start_date'] %} · started {{ proj['start_date'] | ddmmyyyy }}{% endif %}{% if proj['crew_size'] %} · crew of {{ proj['crew_size'] }}{% endif %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="topbar-right">
+        {% if g.user %}<div class="avatar" title="{{ g.user['email'] }}">{{ g.user['email'][:2] }}</div>{% endif %}
+      </div>
+    </header>
+
+    <main class="content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="banner banner-{{ 'success' if category == 'success' else 'error' if category == 'error' else 'info' }} no-print">
+            {{ icon('check' if category == 'success' else 'warn', 14) }}
+            <div>{{ message }}</div>
+          </div>
+        {% endfor %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+</body>
+</html>

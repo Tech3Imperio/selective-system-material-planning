@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, badge, status_badge %}
+{% block title %}{{ po['po_number'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{{ po['po_number'] }} {{ status_badge(po['status']) }}</h1>
+    <p class="page-sub">
+      {% if po['status'] == 'Draft' %}Number locks on issue (FR-O3) · {% endif %}
+      Project <a href="{{ url_for('projects.overview', project_id=po['project_id']) }}">{{ po['project_name'] }}</a>
+      · Order date {{ po['order_date'] | ddmmyyyy }}
+    </p>
+  </div>
+  <div class="page-actions no-print">
+    <a class="btn btn-ghost" href="{{ url_for('orders.register') }}">PO register</a>
+    <a class="btn" href="{{ url_for('orders.print_po', po_id=po['id']) }}">{{ icon('print', 14) }}Preview / print PO</a>
+    {% if po['status'] in ('Issued', 'Partially Received', 'Received') %}
+      <a class="btn" href="{{ url_for('orders.receive', po_id=po['id']) }}">{{ icon('stock', 14) }}Receive materials</a>
+    {% endif %}
+    {% if po['status'] in ('Draft', 'Issued') and not has_receipts %}
+      <form method="post" class="inline" action="{{ url_for('orders.cancel', po_id=po['id']) }}"
+            onsubmit="return confirm('Cancel this PO?');">
+        <button type="submit" class="btn btn-danger">Cancel PO</button>
+      </form>
+    {% endif %}
+    {% if po['status'] in ('Received', 'Partially Received') %}
+      <form method="post" class="inline" action="{{ url_for('orders.close', po_id=po['id']) }}"
+            onsubmit="return confirm('Close this PO? No further receipts will be recorded against it.');">
+        <button type="submit" class="btn">Close PO</button>
+      </form>
+    {% endif %}
+    {% if po['status'] == 'Draft' %}
+      <form method="post" class="inline" action="{{ url_for('orders.issue', po_id=po['id']) }}"
+            onsubmit="return confirm('Issue this PO? It will be locked for editing.');">
+        <button type="submit" class="btn btn-primary">{{ icon('check', 14) }}Issue PO</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mb-16">
+  {% if po['status'] == 'Draft' %}
+  <div class="card-header">
+    <h2 class="card-title">Order details</h2>
+    <span class="muted">Editable while Draft</span>
+  </div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('orders.update', po_id=po['id']) }}">
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">Vendor<span class="req">*</span></span>
+          <select id="vendor_id" name="vendor_id">
+            {% for v in vendors %}
+              <option value="{{ v['id'] }}" {% if v['id'] == po['vendor_id'] %}selected{% endif %}>{{ v['name'] }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Order date</span>
+          <input type="date" id="order_date" name="order_date" value="{{ po['order_date'] }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Expected delivery</span>
+          <input type="date" id="expected_delivery" name="expected_delivery" value="{{ po['expected_delivery'] or '' }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Terms / notes</span>
+          <input type="text" id="terms_notes" name="terms_notes" value="{{ po['terms_notes'] or '' }}"
+                 placeholder="e.g. 50% advance, delivery at site store">
+        </label>
+      </div>
+      <div class="actions-row">
+        <button type="submit" class="btn">Save details</button>
+      </div>
+    </form>
+  </div>
+  {% else %}
+  <div class="card-body">
+    <div class="sheet-block" style="margin-top:0">
+      <div class="kv"><dt>Vendor</dt><dd class="cell-strong">{{ po['vendor_name'] }}</dd></div>
+      <div class="kv"><dt>Order date</dt><dd>{{ po['order_date'] | ddmmyyyy }}</dd></div>
+      <div class="kv"><dt>Expected delivery</dt><dd>{{ po['expected_delivery'] | ddmmyyyy or '—' }}</dd></div>
+      {% if po['terms_notes'] %}<div class="kv"><dt>Terms / notes</dt><dd>{{ po['terms_notes'] }}</dd></div>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{# Draft-line edit forms live outside the table; inputs bind via the HTML form attribute. #}
+{% if po['status'] == 'Draft' %}
+  {% for l in lines %}
+    <form method="post" id="lineform-{{ l['id'] }}"
+          action="{{ url_for('orders.update_line', po_id=po['id'], line_id=l['id']) }}"></form>
+    <form method="post" id="linedel-{{ l['id'] }}"
+          action="{{ url_for('orders.delete_line', po_id=po['id'], line_id=l['id']) }}"
+          onsubmit="return confirm('Remove this line?');"></form>
+  {% endfor %}
+{% endif %}
+
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr><th>Material</th><th class="num">Qty</th><th>UoM</th><th class="num">Rate (₹)</th>
+            <th class="num">Amount (₹)</th><th class="num">Received</th><th>Requirement basis</th>
+            {% if po['status'] == 'Draft' %}<th class="no-print" style="width:120px"></th>{% endif %}</tr>
+      </thead>
+      <tbody>
+        {% for l in lines %}
+        <tr>
+          <td class="cell-strong">{{ l['material_name'] }}</td>
+          {% if po['status'] == 'Draft' %}
+          <td class="num"><input type="text" name="qty" form="lineform-{{ l['id'] }}" class="cell-input"
+                                 value="{{ l['qty'] | qty }}" inputmode="decimal"></td>
+          <td class="cell-muted">{{ l['uom'] }}</td>
+          <td class="num"><input type="text" name="rate" form="lineform-{{ l['id'] }}" class="cell-input"
+                                 value="{{ l['rate'] | qty if l['rate'] is not none else '' }}" inputmode="decimal"></td>
+          {% else %}
+          <td class="num">{{ l['qty'] | qty }}</td>
+          <td class="cell-muted">{{ l['uom'] }}</td>
+          <td class="num">{{ l['rate'] | qty if l['rate'] is not none else '—' }}</td>
+          {% endif %}
+          <td class="num cell-strong">{{ l['amount'] | money if l['amount'] is not none else '—' }}</td>
+          <td class="num">{{ l['received_qty'] | qty }}</td>
+          <td class="cell-note">{{ l['requirement_basis'] or '—' }}</td>
+          {% if po['status'] == 'Draft' %}
+          <td class="no-print">
+            <div class="row-actions">
+              <button type="submit" form="lineform-{{ l['id'] }}" class="btn btn-xs">Update</button>
+              <button type="submit" form="linedel-{{ l['id'] }}" class="icon-btn danger" title="Remove line">{{ icon('trash', 14) }}</button>
+            </div>
+          </td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="cell-muted">No lines.</td></tr>
+        {% endfor %}
+        {% if has_rates %}
+        <tr class="total">
+          <td colspan="4">Total (lines with rates)</td>
+          <td class="num">{{ total | money }}</td>
+          <td colspan="{{ 3 if po['status'] == 'Draft' else 2 }}"></td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  <div class="tbl-foot">
+    <span>Rates are optional in Phase 1; totals appear only when rates are entered (FR-O6).</span>
+    <span>{{ lines | length }} lines</span>
+  </div>
+</div>
+
+{% if po['status'] == 'Draft' %}
+<div class="card mt-16 no-print">
+  <div class="card-header"><h2 class="card-title">Add line</h2></div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('orders.add_line', po_id=po['id']) }}">
+      <div class="form-grid">
+        <label class="field span-2">
+          <span class="field-label">Material</span>
+          <select id="material_id" name="material_id">
+            <option value="">— select —</option>
+            {% for m in materials %}
+              <option value="{{ m['id'] }}">{{ m['name'] }} ({{ m['uom'] }}{% if m['supply_source'] == 'Tostem-supplied' %}, Tostem-supplied{% endif %})</option>
+            {% endfor %}
+          </select>
+          <span class="hint">Tostem-supplied materials are rejected here (FR-O2).</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Qty</span>
+          <input type="text" id="qty" name="qty" inputmode="decimal">
+        </label>
+        <label class="field">
+          <span class="field-label">Rate (₹, optional)</span>
+          <input type="text" id="rate" name="rate" inputmode="decimal">
+        </label>
+        <div class="field">
+          <button type="submit" class="btn">{{ icon('plus', 14) }}Add line</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

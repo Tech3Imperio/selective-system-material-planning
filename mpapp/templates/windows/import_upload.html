@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon %}
+{% block title %}Import windows — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Import window schedule</h1>
+    <p class="page-sub">Upload a CSV or XLSX file matching the app template.
+      Columns: Opening Ref, Location, Config Code, Width mm, Height mm, Qty, Remarks.
+      Rows are validated before anything is imported (W3).</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('windows.import_template') }}">{{ icon('download', 14) }}CSV template</a>
+    <a class="btn" href="{{ url_for('windows.import_template_xlsx') }}">{{ icon('download', 14) }}XLSX template</a>
+  </div>
+</div>
+
+<form method="post" enctype="multipart/form-data">
+  <label class="dropzone" style="margin-bottom:16px">
+    <span class="dropzone-icon">{{ icon('upload', 18) }}</span>
+    <span class="t1">Drop the window schedule file here</span>
+    <span class="t2">or <strong>browse files</strong> · CSV or XLSX</span>
+    <input type="file" name="file" accept=".csv,.xlsx" required style="display:none"
+           onchange="this.form.querySelector('.btn-primary').click()">
+  </label>
+  <div class="actions-row" style="margin-top:0">
+    <button type="submit" class="btn btn-primary">{{ icon('check', 14) }}Upload and validate</button>
+    <a class="btn btn-ghost" href="{{ url_for('windows.list_windows', project_id=project['id']) }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

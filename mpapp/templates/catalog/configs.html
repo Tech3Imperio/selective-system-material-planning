@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, badge %}
+{% block title %}Window configuration types{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Window configuration types</h1>
+    <p class="page-sub">Tracks/panels are informational in Phase 1. Phase 2 will attach quantity formulas
+      to these configuration types.</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-primary" href="{{ url_for('catalog.config_new') }}">{{ icon('plus', 14) }}New configuration type</a>
+  </div>
+</div>
+
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr><th>Code</th><th>Name</th><th class="num">Tracks</th><th class="num">Panels</th>
+            <th>Description</th><th>Active</th><th style="width:100px"></th></tr>
+      </thead>
+      <tbody>
+        {% for c in configs %}
+        <tr>
+          <td><span class="chip">{{ c['code'] }}</span></td>
+          <td class="cell-strong">{{ c['name'] }}</td>
+          <td class="num">{{ c['tracks'] if c['tracks'] is not none else '—' }}</td>
+          <td class="num">{{ c['panels'] if c['panels'] is not none else '—' }}</td>
+          <td class="cell-note">{{ c['description'] or '—' }}</td>
+          <td>{{ badge('approved', 'Active') if c['active'] else badge('closed', 'Inactive') }}</td>
+          <td>
+            <div class="row-actions">
+              <a class="icon-btn" title="Edit" href="{{ url_for('catalog.config_edit', config_id=c['id']) }}">{{ icon('edit', 14) }}</a>
+              <form method="post" class="inline" action="{{ url_for('catalog.config_toggle', config_id=c['id']) }}">
+                <button type="submit" class="btn btn-ghost btn-xs">{{ 'Deactivate' if c['active'] else 'Reactivate' }}</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

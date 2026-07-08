@@ -1,0 +1,265 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, badge, status_badge, source_badge %}
+{% block title %}Materials — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Materials</h1>
+    <p class="page-sub">Window consumables. Auto rows are calculated from the drawing sheet's window products
+      (panel below); Manual rows are typed (FR-R4). Packers stay manual; Gaskets are handled on the Tostem
+      Requisition and are unchanged.</p>
+  </div>
+  <div class="page-actions no-print">
+    <a class="btn" href="{{ url_for('reports.requirement_report', project_id=project['id']) }}">{{ icon('print', 14) }}Requirement report</a>
+    <button type="submit" class="btn btn-primary" form="po-form">{{ icon('po', 14) }}Create PO from approved</button>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('orders.from_requirements', project_id=project['id']) }}" id="po-form">
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th class="no-print" style="width:36px">Select</th>
+          <th>Material</th><th>Mode</th><th class="num">Required qty</th><th>UoM</th>
+          <th>Basis / formula</th><th>Status</th><th class="num">On PO</th>
+          <th class="no-print" style="width:120px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in lines %}
+        {% set auto = l['calc_method'] != 'manual' %}
+        <tr>
+          <td class="no-print">
+            {% if l['status'] == 'Approved' %}
+              <input type="checkbox" name="line_ids" value="{{ l['id'] }}" style="width:auto">
+            {% endif %}
+          </td>
+          <td class="cell-strong">
+            {{ l['material_name'] }}
+            {% if l['supply_source'] == 'Tostem-supplied' %}{{ badge('tostem', 'Tostem') }}{% endif %}
+          </td>
+          <td>{{ badge('auto' if auto else 'manual', 'Auto' if auto else 'Manual') }}</td>
+          <td class="num {{ 'qty-auto' if auto else 'cell-strong' }}">
+            {% if auto %}{{ icon('settings', 11) }}{% endif %}{{ l['required_qty'] | qty }}
+          </td>
+          <td class="cell-muted">{{ l['uom'] }}</td>
+          <td class="cell-note">{{ l['basis_note'] or '—' }}</td>
+          <td>{{ status_badge(l['status']) }}</td>
+          <td class="num">{{ l['on_po_qty'] | qty }}</td>
+          <td class="no-print">
+            <div class="row-actions">
+              {% if l['status'] == 'Draft' %}
+                {% if l['calc_method'] == 'manual' %}
+                  <a class="icon-btn" title="Edit"
+                     href="{{ url_for('requirements.edit', project_id=project['id'], line_id=l['id']) }}">{{ icon('edit', 14) }}</a>
+                {% endif %}
+                <button type="submit" formmethod="post" class="btn btn-ghost btn-xs approve"
+                        formaction="{{ url_for('requirements.approve', project_id=project['id'], line_id=l['id']) }}">Approve</button>
+                <button type="submit" formmethod="post" class="icon-btn danger" title="Delete"
+                        formaction="{{ url_for('requirements.delete', project_id=project['id'], line_id=l['id']) }}"
+                        onclick="return confirm('Delete this requirement line?');">{{ icon('trash', 14) }}</button>
+              {% else %}
+                <button type="submit" formmethod="post" class="btn btn-ghost btn-xs"
+                        formaction="{{ url_for('requirements.unapprove', project_id=project['id'], line_id=l['id']) }}">Un-approve</button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="cell-muted">No material requirement lines yet — add one below.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="tbl-foot">
+    <span>Select approved lines and use “Create PO from approved” — grouped by default vendor.
+      Tostem-supplied lines cannot go on a PO (FR-O2).</span>
+    <span>{{ lines | length }} lines</span>
+  </div>
+</div>
+</form>
+
+{# Add a manual requirement line #}
+<div class="card mt-16 no-print">
+  <div class="card-header"><h2 class="card-title">Add material requirement line</h2></div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('requirements.add', project_id=project['id']) }}">
+      <div class="form-grid">
+        <label class="field span-2">
+          <span class="field-label">Material<span class="req">*</span></span>
+          <select id="material_id" name="material_id" required onchange="togglePackerNote(this)">
+            <option value="">— select —</option>
+            {% for m in materials %}
+              <option value="{{ m['id'] }}">{{ m['name'] }} ({{ m['uom'] }}{% if m['supply_source'] == 'Tostem-supplied' %}, Tostem-supplied{% endif %})</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Required quantity<span class="req">*</span></span>
+          <input type="text" id="required_qty" name="required_qty" required inputmode="decimal" autocomplete="off">
+          <span class="hint">Actual value, typed in</span>
+        </label>
+        <label class="field span-2">
+          <span class="field-label">Basis note</span>
+          <input type="text" id="basis_note" name="basis_note" placeholder="e.g. “20 windows, lot 1”">
+        </label>
+        <div class="field">
+          <button type="submit" class="btn btn-primary">Add line (Draft)</button>
+        </div>
+      </div>
+      <div id="packer-note" class="banner banner-info" style="display:none; margin:12px 0 0">
+        {{ icon('warn', 14) }}
+        <div><strong>Packers — manual entry.</strong> Packer requirements are highly variable and are not
+        formula-derived. Reference only: <em>Typical mix: ~60% 2mm, 30% 3mm, 10% 5mm packers.</em></div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ---------------- Formula-calculated materials ---------------- #}
+{% if not formula['products'] %}
+<div class="banner banner-info mt-16 no-print">
+  {{ icon('settings', 14) }}
+  <div>No window products yet for the Silicone / Screws / Masking Tape formulas. Upload a Tostem drawing
+    sheet on the <a href="{{ url_for('glass.sheet', project_id=project['id']) }}">Glass Sheet</a> tab —
+    the parser captures each window's Product Width/Height, which these formulas use.</div>
+</div>
+{% else %}
+<div class="card mt-16 no-print">
+  <div class="card-header">
+    <h2 class="card-title">Formula-calculated materials (Silicone · Screws · Masking Tape)</h2>
+    <span class="muted">Based on <strong>{{ formula['products']|length }}</strong> window product(s)
+      ({{ formula['total_windows'] }} windows) from the drawing sheet</span>
+  </div>
+  <form method="post" action="{{ url_for('requirements.save_formulas', project_id=project['id']) }}"
+        id="formula-form">
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead>
+          <tr><th style="width:56px">Include</th><th>Material</th><th>Mode</th><th>Parameter</th>
+              <th class="num">Calculated qty</th><th>UoM</th><th>Formula / parameters used</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><input type="checkbox" name="methods" value="silicone" checked style="width:auto"
+                       {% if formula['auto_lines'].get('silicone') and formula['auto_lines']['silicone']['status'] == 'Approved' %}disabled{% endif %}></td>
+            <td class="cell-strong">Silicone</td>
+            <td>{{ badge('auto', 'Auto') }}</td>
+            <td>
+              <label class="muted" for="gap_mm">Gap (mm)</label>
+              <input type="number" step="0.1" min="0.1" id="gap_mm" name="gap_mm" class="param-input"
+                     value="{{ formula['params']['gap_mm'] }}" oninput="recalc()">
+            </td>
+            <td class="num qty-auto" id="qty-silicone">{{ formula['calcs']['silicone']['qty'] }}</td>
+            <td class="cell-muted">tubes</td>
+            <td class="cell-muted" id="sum-silicone" style="font-size:12px">{{ formula['calcs']['silicone']['summary'] }}</td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" name="methods" value="screws" checked style="width:auto"
+                       {% if formula['auto_lines'].get('screws') and formula['auto_lines']['screws']['status'] == 'Approved' %}disabled{% endif %}></td>
+            <td class="cell-strong">Screws</td>
+            <td>{{ badge('auto', 'Auto') }}</td>
+            <td>
+              <label class="muted" for="spacing_mm">Spacing (mm)</label>
+              <input type="number" step="1" min="1" id="spacing_mm" name="spacing_mm" class="param-input"
+                     value="{{ formula['params']['spacing_mm'] }}" oninput="recalc()">
+            </td>
+            <td class="num qty-auto" id="qty-screws">{{ formula['calcs']['screws']['qty'] }}</td>
+            <td class="cell-muted">nos</td>
+            <td class="cell-muted" id="sum-screws" style="font-size:12px">{{ formula['calcs']['screws']['summary'] }}</td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" name="methods" value="masking_tape" checked style="width:auto"
+                       {% if formula['auto_lines'].get('masking_tape') and formula['auto_lines']['masking_tape']['status'] == 'Approved' %}disabled{% endif %}></td>
+            <td class="cell-strong">Masking Tape</td>
+            <td>{{ badge('auto', 'Auto') }}</td>
+            <td class="cell-muted">fixed (20 m roll)</td>
+            <td class="num qty-auto" id="qty-masking_tape">{{ formula['calcs']['masking_tape']['qty'] }}</td>
+            <td class="cell-muted">rolls</td>
+            <td class="cell-muted" id="sum-masking_tape" style="font-size:12px">{{ formula['calcs']['masking_tape']['summary'] }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-body" style="border-top:1px solid var(--slate-100)">
+      <div class="actions-row" style="margin-top:0">
+        <button type="submit" class="btn btn-primary">Save to requirement lines</button>
+        <span class="muted">Change a parameter to recalculate live; Save writes the values to the requirement
+          lines above. Approved auto lines are locked — un-approve to recompute. (Glass stays fixed once
+          parsed — it is a physical spec, not a formula.)</span>
+      </div>
+      <details class="panel mt-12">
+        <summary>Per-window breakdown ({{ formula['products']|length }} products)</summary>
+        <div class="panel-body tbl-wrap">
+          <table class="tbl" style="background:#fff">
+            <thead>
+              <tr><th>Ref</th><th class="num">Product W</th><th class="num">Product H</th>
+                  <th class="num">Windows</th><th class="num">Silicone</th><th class="num">Screws</th>
+                  <th class="num">Tape</th><th>Fmt</th></tr>
+            </thead>
+            <tbody>
+              {% for p in formula['products'] %}
+              <tr data-pw="{{ p['product_width'] }}" data-ph="{{ p['product_height'] }}" data-qty="{{ p['window_qty'] }}">
+                <td>{{ p['ref_code'] }}</td>
+                <td class="num">{{ p['product_width'] | qty }}</td>
+                <td class="num">{{ p['product_height'] | qty }}</td>
+                <td class="num">{{ p['window_qty'] }}</td>
+                <td class="num sil-cell"></td>
+                <td class="num scr-cell"></td>
+                <td class="num tap-cell"></td>
+                <td><span class="chip">{{ p['source_format'] }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </form>
+</div>
+
+<script>
+  var PRODUCTS = {{ formula['products_json'] | tojson }};
+  var SILICONE_K = {{ formula['silicone_k'] }};
+  var TAPE_PASSES = {{ formula['tape_passes'] }};
+  var TAPE_ROLL = {{ formula['tape_roll_mm'] }};
+  function perim(w, h) { return 2 * (w + h); }
+  function recalc() {
+    var gap = parseFloat(document.getElementById('gap_mm').value) || 0;
+    var spacing = parseFloat(document.getElementById('spacing_mm').value) || 1;
+    var sil = 0, scr = 0, tap = 0;
+    var rows = document.querySelectorAll('tr[data-pw]');
+    PRODUCTS.forEach(function (p, i) {
+      var per = perim(p.pw, p.ph);
+      var s = per * gap * SILICONE_K * p.qty;
+      var c = (per / spacing) * p.qty;
+      var t = (TAPE_PASSES * per / TAPE_ROLL) * p.qty;
+      sil += s; scr += c; tap += t;
+      if (rows[i]) {
+        rows[i].querySelector('.sil-cell').textContent = s.toFixed(2);
+        rows[i].querySelector('.scr-cell').textContent = c.toFixed(1);
+        rows[i].querySelector('.tap-cell').textContent = t.toFixed(2);
+      }
+    });
+    document.getElementById('qty-silicone').textContent = Math.ceil(sil - 1e-9);
+    document.getElementById('qty-screws').textContent = Math.ceil(scr - 1e-9);
+    document.getElementById('qty-masking_tape').textContent = Math.ceil(tap - 1e-9);
+    document.getElementById('sum-silicone').textContent =
+      gap + 'mm gap · perimeter × gap · ref 2000×2000 = 3.5 cartridges';
+    document.getElementById('sum-screws').textContent =
+      spacing + 'mm spacing · 1 screw per ' + spacing + 'mm of perimeter';
+  }
+  recalc();
+</script>
+{% endif %}
+
+<script>
+  function togglePackerNote(sel) {
+    var packerId = "{{ packers_id if packers_id is not none else '' }}";
+    document.getElementById('packer-note').style.display =
+      (packerId && sel.value === packerId) ? 'flex' : 'none';
+  }
+</script>
+{% endblock %}

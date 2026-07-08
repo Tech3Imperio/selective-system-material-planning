@@ -1,0 +1,254 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, badge %}
+{% block title %}Glass Sheet — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Glass Sheet</h1>
+    <p class="page-sub">Upload the Tostem Drawing Sheet PDF; sizes and quantities are parsed automatically
+      (format A = page-level Order Qty × Qty/1set; format B = per-row Order Qty). Thickness, type and colour
+      are not in the PDF — enter them per row or bulk-apply below.</p>
+  </div>
+  {% if lines %}
+  <div class="page-actions no-print">
+    <a class="btn btn-primary" href="#upload">{{ icon('upload', 14) }}Replace / add PDF</a>
+  </div>
+  {% endif %}
+</div>
+
+{# Upload dropzone (empty + processing phases) #}
+<form method="post" action="{{ url_for('glass.upload', project_id=project['id']) }}"
+      enctype="multipart/form-data" class="no-print mb-16" id="upload">
+  <label class="dropzone" id="dropzone" {% if sheets %}style="padding:24px"{% endif %}>
+    <span class="dropzone-icon">{{ icon('upload', 18) }}</span>
+    <span class="t1">Drop the Tostem Drawing Sheet PDF here</span>
+    <span class="t2">or <strong>browse files</strong> · PDF only, max 5 MB</span>
+    <input type="file" name="file" accept="application/pdf,.pdf" required
+           style="display:none" onchange="startParse(this)">
+  </label>
+  <div class="processing-box" id="processing">
+    <span class="spinner"></span>
+    <div>
+      <div class="t1">Parsing <span id="parse-fname">drawing sheet</span>…</div>
+      <div class="t2">Extracting reference codes, glass sizes and quantities from the drawing sheet</div>
+    </div>
+  </div>
+</form>
+
+{% if sheets %}
+<div class="card mb-16">
+  <div class="card-header"><h2 class="card-title">Uploaded drawing sheets</h2></div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr><th>File</th><th>Uploaded</th><th class="num">Glass lines</th><th class="num">Glass qty</th>
+            <th class="num">Windows</th><th class="num">Fmt A pages</th><th class="num">Fmt B pages</th>
+            <th class="no-print"></th></tr>
+      </thead>
+      <tbody>
+        {% for s in sheets %}
+        <tr>
+          <td>
+            <span class="cell-strong">{{ s['filename'] }}</span>
+            {{ badge('approved', 'Parsed', ic='check') }}
+          </td>
+          <td class="cell-muted">{{ s['uploaded_at'] }}</td>
+          <td class="num">{{ s['glass_count'] }}</td>
+          <td class="num">{{ s['glass_total_qty'] }}</td>
+          <td class="num">{{ s['product_count'] }}</td>
+          <td class="num">{{ s['pages_format_a'] }}</td>
+          <td class="num">{{ s['pages_format_b'] }}</td>
+          <td class="no-print">
+            <div class="row-actions">
+              <a class="icon-btn" title="Download original PDF"
+                 href="{{ url_for('glass.download_sheet', project_id=project['id'], sheet_id=s['id']) }}">{{ icon('download', 14) }}</a>
+              <form method="post" class="inline"
+                    action="{{ url_for('glass.delete_sheet', project_id=project['id'], sheet_id=s['id']) }}"
+                    onsubmit="return confirm('Delete this sheet and its parsed glass lines and window products?');">
+                <button type="submit" class="icon-btn danger" title="Delete sheet">{{ icon('trash', 14) }}</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if lines %}
+{% set ns = namespace(sqm=0.0, incomplete=0) %}
+{% for l in lines %}
+  {% set ns.sqm = ns.sqm + (l['glass_width'] * l['glass_height'] * l['qty']) / 1000000 %}
+  {% if not l['thickness'] or not l['glass_type'] or not l['glass_color'] %}
+    {% set ns.incomplete = ns.incomplete + 1 %}
+  {% endif %}
+{% endfor %}
+
+<div class="stat-strip">
+  <div class="stat-card">
+    <span class="stat-value md">{{ lines | length }}</span><span class="stat-label">glass references</span>
+    <span class="stat-sep">|</span>
+    <span class="stat-value md">{{ total_qty }}</span><span class="stat-label">pieces</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-value md">{{ '%.1f' | format(ns.sqm) }}</span>
+    <span class="stat-label">sqm total glass</span>
+  </div>
+</div>
+
+{% if ns.incomplete > 0 %}
+<div class="banner banner-warn no-print">
+  {{ icon('warn', 14) }}
+  <div><strong>{{ ns.incomplete }} row{{ 's' if ns.incomplete != 1 }} incomplete.</strong>
+    Thickness, type and colour must be entered manually — they are not in the PDF.</div>
+</div>
+{% endif %}
+
+{# Bulk spec (whole order is usually one spec; rows can be overridden below) #}
+<form method="post" action="{{ url_for('glass.bulk_spec', project_id=project['id']) }}" class="no-print">
+  <div class="card mb-16">
+    <div class="card-header">
+      <h2 class="card-title">Apply a glass spec to all lines</h2>
+      <span class="muted">The whole order is usually one spec; individual rows can be overridden below.</span>
+    </div>
+    <div class="card-body">
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">Thickness</span>
+          <input type="text" name="thickness" placeholder="e.g. 6mm+1.52pvb+6mm">
+        </label>
+        <label class="field">
+          <span class="field-label">Glass type</span>
+          <input type="text" name="glass_type" placeholder="e.g. Clear Laminated">
+        </label>
+        <label class="field">
+          <span class="field-label">Colour</span>
+          <input type="text" name="glass_color" placeholder="e.g. Clear">
+        </label>
+        <div class="field">
+          <button type="submit" class="btn">Apply to all</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+{# Per-row spec forms bind to inputs via the HTML form attribute. #}
+{% for l in lines %}
+<form method="post" id="glass-{{ l['id'] }}"
+      action="{{ url_for('glass.update_spec', project_id=project['id'], line_id=l['id']) }}"></form>
+{% endfor %}
+
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Reference code</th><th class="num">Glass width mm</th><th class="num">Glass height mm</th>
+          <th class="num">Qty</th><th>Fmt</th>
+          <th style="width:130px">Thickness</th><th style="width:120px">Glass type</th><th style="width:100px">Colour</th>
+          <th>Row status</th><th class="no-print"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in lines %}
+        {% set complete = l['thickness'] and l['glass_type'] and l['glass_color'] %}
+        <tr>
+          <td class="cell-strong">{{ l['ref_code'] }}</td>
+          <td class="num">{{ l['glass_width'] | qty }}</td>
+          <td class="num">{{ l['glass_height'] | qty }}</td>
+          <td class="num cell-strong">{{ l['qty'] }}</td>
+          <td><span class="chip">{{ l['source_format'] }}</span></td>
+          <td><input type="text" name="thickness" form="glass-{{ l['id'] }}"
+                     class="cell-input-text {{ 'empty' if not l['thickness'] }}"
+                     value="{{ l['thickness'] or '' }}" oninput="markFilled(this)"></td>
+          <td><input type="text" name="glass_type" form="glass-{{ l['id'] }}"
+                     class="cell-input-text {{ 'empty' if not l['glass_type'] }}"
+                     value="{{ l['glass_type'] or '' }}" oninput="markFilled(this)"></td>
+          <td><input type="text" name="glass_color" form="glass-{{ l['id'] }}"
+                     class="cell-input-text {{ 'empty' if not l['glass_color'] }}"
+                     value="{{ l['glass_color'] or '' }}" oninput="markFilled(this)"></td>
+          <td>
+            {% if complete %}
+              <span class="status-ok">{{ icon('check', 11) }}Complete</span>
+            {% else %}
+              <span class="status-warn">{{ icon('warn', 11) }}Needs input</span>
+            {% endif %}
+          </td>
+          <td class="no-print">
+            <button type="submit" form="glass-{{ l['id'] }}" class="btn btn-xs">Save</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="tbl-foot">
+    <span>Parsed columns (reference, sizes, qty) are read-only — re-upload the PDF to change them.
+      Widths/heights are glass cut sizes, not opening sizes.</span>
+    <span>{{ lines | length }} lines</span>
+  </div>
+</div>
+
+<div class="card mt-16">
+  <div class="card-header">
+    <h2 class="card-title">Window products used for formulas</h2>
+    <span class="muted">{{ products | length }} product(s) · {{ total_windows }} windows</span>
+  </div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr><th>Reference code</th><th class="num">Product W</th><th class="num">Product H</th>
+            <th class="num">Windows</th><th>Fmt</th></tr>
+      </thead>
+      <tbody>
+        {% for p in products %}
+        <tr>
+          <td class="cell-strong">{{ p['ref_code'] }}</td>
+          <td class="num">{{ p['product_width'] | qty }}</td>
+          <td class="num">{{ p['product_height'] | qty }}</td>
+          <td class="num">{{ p['window_qty'] }}</td>
+          <td><span class="chip">{{ p['source_format'] }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="footnote no-print">These product dimensions feed the Silicone / Screws / Masking Tape formulas on the
+  <a href="{{ url_for('requirements.list_requirements', project_id=project['id']) }}">Materials</a> tab.</p>
+{% endif %}
+
+<script>
+  function startParse(input) {
+    if (!input.files.length) return;
+    document.getElementById('parse-fname').textContent = input.files[0].name;
+    document.getElementById('dropzone').style.display = 'none';
+    document.getElementById('processing').style.display = 'flex';
+    input.form.submit();
+  }
+  function markFilled(el) {
+    el.classList.toggle('empty', el.value.trim() === '');
+  }
+  // Drag & drop support for the dropzone.
+  (function () {
+    var dz = document.getElementById('dropzone');
+    if (!dz) return;
+    ['dragover', 'dragenter'].forEach(function (ev) {
+      dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('drag'); });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('drag'); });
+    });
+    dz.addEventListener('drop', function (e) {
+      var input = dz.querySelector('input[type=file]');
+      if (e.dataTransfer.files.length) {
+        input.files = e.dataTransfer.files;
+        startParse(input);
+      }
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, badge, status_badge %}
+{% block title %}Tools — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Tools</h1>
+    <p class="page-sub">PPE and site tools for the installation crew (safety shoes, helmets, jackets, and any
+      user-added tool). All quantities are manual entry — they depend on crew and duration, not window specs.
+      Tools reuse the same approval, purchase-order and stock handling as materials.</p>
+  </div>
+  <div class="page-actions no-print">
+    <a class="btn" href="{{ url_for('reports.requirement_report', project_id=project['id']) }}">{{ icon('print', 14) }}Requirement report</a>
+    <button type="submit" class="btn btn-primary" form="tools-po-form">{{ icon('po', 14) }}Create PO from approved</button>
+  </div>
+</div>
+
+{# Add tool line #}
+<div class="card mb-16 no-print">
+  <div class="card-header"><h2 class="card-title">Add tool line</h2></div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('tools.add', project_id=project['id']) }}">
+      <div class="form-grid">
+        <label class="field span-2">
+          <span class="field-label">Item<span class="req">*</span></span>
+          <select id="material_id" name="material_id" required>
+            <option value="">— select item —</option>
+            {% for t in tools %}
+              <option value="{{ t['id'] }}">{{ t['name'] }} ({{ t['uom'] }})</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Quantity<span class="req">*</span></span>
+          <input type="text" id="required_qty" name="required_qty" required inputmode="decimal" autocomplete="off" placeholder="0">
+        </label>
+        <label class="field span-2">
+          <span class="field-label">Basis note</span>
+          <input type="text" id="basis_note" name="basis_note" placeholder='e.g. "crew of 6 × 2 months"'>
+        </label>
+        <div class="field">
+          <button type="submit" class="btn btn-primary">Add line (Draft)</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('orders.from_requirements', project_id=project['id']) }}" id="tools-po-form">
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th class="no-print" style="width:36px">Select</th>
+          <th>Item</th><th>Mode</th><th class="num">Required qty</th><th>UoM</th>
+          <th>Basis note</th><th>Status</th><th class="num">On PO</th>
+          <th class="no-print" style="width:120px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in lines %}
+        <tr>
+          <td class="no-print">
+            {% if l['status'] == 'Approved' %}
+              <input type="checkbox" name="line_ids" value="{{ l['id'] }}" style="width:auto">
+            {% endif %}
+          </td>
+          <td class="cell-strong">{{ l['material_name'] }}</td>
+          <td>{{ badge('manual', 'Manual') }}</td>
+          <td class="num cell-strong">{{ l['required_qty'] | qty }}</td>
+          <td class="cell-muted">{{ l['uom'] }}</td>
+          <td class="cell-note">{{ l['basis_note'] or '—' }}</td>
+          <td>{{ status_badge(l['status']) }}</td>
+          <td class="num">{{ l['on_po_qty'] | qty }}</td>
+          <td class="no-print">
+            <div class="row-actions">
+              {% if l['status'] == 'Draft' %}
+                <a class="icon-btn" title="Edit"
+                   href="{{ url_for('tools.edit', project_id=project['id'], line_id=l['id']) }}">{{ icon('edit', 14) }}</a>
+                <button type="submit" formmethod="post" class="btn btn-ghost btn-xs approve"
+                        formaction="{{ url_for('tools.approve', project_id=project['id'], line_id=l['id']) }}">Approve</button>
+                <button type="submit" formmethod="post" class="icon-btn danger" title="Delete"
+                        formaction="{{ url_for('tools.delete', project_id=project['id'], line_id=l['id']) }}"
+                        onclick="return confirm('Delete this tool line?');">{{ icon('trash', 14) }}</button>
+              {% else %}
+                <button type="submit" formmethod="post" class="btn btn-ghost btn-xs"
+                        formaction="{{ url_for('tools.unapprove', project_id=project['id'], line_id=l['id']) }}">Un-approve</button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="cell-muted">No tool lines yet — add one above.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="tbl-foot">
+    <span>Select approved lines and use “Create PO from approved” — grouped by vendor.</span>
+    <span>{{ lines | length }} lines</span>
+  </div>
+</div>
+</form>
+
+<p class="footnote no-print">Need a new tool in the catalog? Add it under
+  <a href="{{ url_for('catalog.material_new') }}">Material Catalog → New</a> with type “Tool”.</p>
+{% endblock %}

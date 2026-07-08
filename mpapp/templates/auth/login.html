@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in — {{ company_name }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+{% from '_ui.html' import icon %}
+<body class="login-body">
+<div>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="banner banner-{{ 'success' if category == 'success' else 'error' if category == 'error' else 'info' }}">
+        {{ icon('check' if category == 'success' else 'warn', 14) }}
+        <div>{{ message }}</div>
+      </div>
+    {% endfor %}
+  {% endwith %}
+  <div class="login-card">
+    <div class="login-head">
+      <div class="logo-mark">SS</div>
+      <div>
+        <div class="app-name">{{ company_name }}</div>
+        <div class="app-sub">Material Planning</div>
+      </div>
+    </div>
+    <form method="post" class="form-stack wide">
+      <label class="field">
+        <span class="field-label">Email</span>
+        <input type="email" name="email" required autofocus>
+      </label>
+      <label class="field">
+        <span class="field-label">Password</span>
+        <input type="password" name="password" required>
+      </label>
+      <button type="submit" class="btn btn-primary" style="justify-content:center">Log in</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

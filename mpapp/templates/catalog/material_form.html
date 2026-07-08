@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit material' if material else 'New material' }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{{ 'Edit catalog item' if material else 'New catalog item' }}</h1>
+  </div>
+</div>
+
+<div class="card" style="max-width:720px">
+  <div class="card-body">
+    <form method="post" class="form-stack wide">
+      <label class="field">
+        <span class="field-label">Name<span class="req">*</span></span>
+        <input type="text" id="name" name="name" required value="{{ material['name'] if material else '' }}">
+      </label>
+      <div class="form-grid" style="grid-template-columns:repeat(2, 1fr)">
+        <label class="field">
+          <span class="field-label">Category<span class="req">*</span></span>
+          <input type="text" id="category" name="category" required list="category-options"
+                 value="{{ material['category'] if material else '' }}">
+          <datalist id="category-options">
+            {% for c in categories %}<option value="{{ c }}">{% endfor %}
+          </datalist>
+          <span class="hint">Pick or type a new one</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Unit of measure<span class="req">*</span></span>
+          <input type="text" id="uom" name="uom" required list="uom-options"
+                 value="{{ material['uom'] if material else '' }}">
+          <datalist id="uom-options">
+            {% for u in uoms %}<option value="{{ u }}">{% endfor %}
+          </datalist>
+          <span class="hint">Pick or type a new one</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Catalog type<span class="req">*</span></span>
+          <select id="item_type" name="item_type">
+            <option value="Material" {% if not material or material['item_type'] == 'Material' %}selected{% endif %}>Material (consumable)</option>
+            <option value="Tool" {% if material and material['item_type'] == 'Tool' %}selected{% endif %}>Tool / PPE</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Supply source<span class="req">*</span></span>
+          <select id="supply_source" name="supply_source">
+            <option value="Vendor-procured" {% if material and material['supply_source'] == 'Vendor-procured' %}selected{% endif %}>Vendor-procured</option>
+            <option value="Tostem-supplied" {% if material and material['supply_source'] == 'Tostem-supplied' %}selected{% endif %}>Tostem-supplied (never on a vendor PO)</option>
+          </select>
+        </label>
+      </div>
+      <label class="field">
+        <span class="field-label">Default vendor</span>
+        <select id="default_vendor_id" name="default_vendor_id">
+          <option value="">—</option>
+          {% for v in vendors %}
+            <option value="{{ v['id'] }}" {% if material and material['default_vendor_id'] == v['id'] %}selected{% endif %}>{{ v['name'] }}</option>
+          {% endfor %}
+        </select>
+        <span class="hint">Prefills PO grouping</span>
+      </label>
+      <label class="field">
+        <span class="field-label">Notes</span>
+        <textarea id="notes" name="notes" rows="2">{{ material['notes'] if material else '' }}</textarea>
+      </label>
+      <div class="actions-row" style="margin-top:4px">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a class="btn btn-ghost" href="{{ url_for('catalog.materials') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon %}
+{% block title %}Reports — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Reports</h1>
+    <p class="page-sub">Printables use the browser's Print → Save as PDF (§10).</p>
+  </div>
+</div>
+
+<div class="card" style="max-width:720px">
+  <ul class="report-list">
+    <li>
+      <a href="{{ url_for('reports.requirement_report', project_id=project['id']) }}">
+        <div class="r-title">R1 — Material Requirement Report</div>
+        <div class="r-sub">All requirement lines with status and basis notes, printable</div>
+      </a>
+    </li>
+    <li>
+      <a href="{{ url_for('reports.coverage_report', project_id=project['id']) }}">
+        <div class="r-title">R2 — Coverage / Shortfall</div>
+        <div class="r-sub">Required / Ordered / Received / Issued / On hand / To-order gap</div>
+      </a>
+    </li>
+    <li>
+      <a href="{{ url_for('reports.tostem_requisition', project_id=project['id']) }}">
+        <div class="r-title">R4 — Tostem Requisition</div>
+        <div class="r-sub">Tostem-supplied quantities + window summary, printable/PDF</div>
+      </a>
+    </li>
+    <li>
+      <a href="{{ url_for('stock.export_csv', project_id=project['id']) }}">
+        <div class="r-title">R5 — Stock ledger export (CSV)</div>
+        <div class="r-sub">Or view the ledger on screen under Stock</div>
+      </a>
+    </li>
+    <li>
+      <a href="{{ url_for('orders.register', project_id=project['id']) }}">
+        <div class="r-title">PO register for this project</div>
+        <div class="r-sub">Printable PO documents (R3) open from each PO</div>
+      </a>
+    </li>
+  </ul>
+</div>
+{% endblock %}

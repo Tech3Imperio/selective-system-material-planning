@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon %}
+{% block title %}Create POs — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Create Purchase Orders</h1>
+    <p class="page-sub">The selected approved lines are grouped by each material's default vendor
+      (changeable per group — groups given the same vendor are merged into one PO). Quantities can be
+      edited on the draft PO before issuing.</p>
+  </div>
+  <div class="page-actions">
+    <ol class="stepper">
+      <li><span class="step-dot done">{{ icon('check', 10) }}</span><span class="step-label">Select approved lines</span></li>
+      <li><span class="bar"></span><span class="step-dot current">2</span><span class="step-label current">Review vendor groups</span></li>
+      <li><span class="bar"></span><span class="step-dot todo">3</span><span class="step-label">Draft &amp; issue</span></li>
+    </ol>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('orders.create', project_id=project['id']) }}">
+  {% for group in groups %}
+  <div class="card mb-16">
+    <div class="card-header">
+      <h2 class="card-title">PO group {{ loop.index }}</h2>
+      <span class="muted">{{ group['lines'] | length }} line(s)</span>
+    </div>
+    <div class="card-body" style="border-bottom:1px solid var(--slate-200)">
+      <input type="hidden" name="group_keys" value="{{ group['key'] }}">
+      <input type="hidden" name="lines_{{ group['key'] }}"
+             value="{{ group['lines'] | map(attribute='id') | join(',') }}">
+      <div class="form-grid">
+        <label class="field span-2">
+          <span class="field-label">Vendor<span class="req">*</span></span>
+          <select id="vendor_{{ group['key'] }}" name="vendor_{{ group['key'] }}" required>
+            <option value="">— select vendor —</option>
+            {% for v in vendors %}
+              <option value="{{ v['id'] }}" {% if group['default_vendor_id'] == v['id'] %}selected{% endif %}>{{ v['name'] }}</option>
+            {% endfor %}
+          </select>
+          {% if not group['default_vendor_id'] %}
+            <span class="hint">No default vendor set for these materials — pick one.</span>
+          {% endif %}
+        </label>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead>
+          <tr><th>Material</th><th class="num">Qty</th><th>UoM</th><th>Basis note</th></tr>
+        </thead>
+        <tbody>
+          {% for l in group['lines'] %}
+          <tr>
+            <td class="cell-strong">{{ l['material_name'] }}</td>
+            <td class="num">{{ l['required_qty'] | qty }}</td>
+            <td class="cell-muted">{{ l['uom'] }}</td>
+            <td class="cell-note">{{ l['basis_note'] or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+  <div class="actions-row">
+    <button type="submit" class="btn btn-primary">{{ icon('check', 14) }}Create draft PO(s)</button>
+    <a class="btn btn-ghost" href="{{ url_for('requirements.list_requirements', project_id=project['id']) }}">Cancel</a>
+    <span class="muted">PO numbers (SS-PO-YYYY-NNN) are assigned on creation and lock on issue (FR-O3).</span>
+  </div>
+</form>
+{% endblock %}

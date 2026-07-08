@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon %}
+{% block title %}{{ 'Edit project' if project else 'New project' }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{{ 'Edit project' if project else 'New project' }}</h1>
+  </div>
+</div>
+
+<div class="card" style="max-width:720px">
+  <div class="card-body">
+    <form method="post" class="form-stack wide">
+      <label class="field">
+        <span class="field-label">Project name<span class="req">*</span></span>
+        <input type="text" id="name" name="name" required value="{{ project['name'] if project else '' }}">
+      </label>
+      <label class="field">
+        <span class="field-label">Client name<span class="req">*</span></span>
+        <input type="text" id="client_name" name="client_name" required value="{{ project['client_name'] if project else '' }}">
+      </label>
+      <label class="field">
+        <span class="field-label">Site address</span>
+        <textarea id="site_address" name="site_address" rows="2">{{ project['site_address'] if project else '' }}</textarea>
+      </label>
+      <div class="form-grid" style="grid-template-columns:repeat(2, 1fr)">
+        <label class="field">
+          <span class="field-label">Status<span class="req">*</span></span>
+          <select id="status" name="status">
+            {% for s in statuses %}
+              <option value="{{ s }}" {% if project and project['status'] == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Crew size</span>
+          <input type="number" id="crew_size" name="crew_size" min="1"
+                 value="{{ project['crew_size'] if project and project['crew_size'] else '' }}">
+          <span class="hint">Context for PPE planning only</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Start date</span>
+          <input type="date" id="start_date" name="start_date" value="{{ project['start_date'] if project else '' }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Expected end date</span>
+          <input type="date" id="expected_end_date" name="expected_end_date" value="{{ project['expected_end_date'] if project else '' }}">
+        </label>
+      </div>
+      <label class="field">
+        <span class="field-label">Notes</span>
+        <textarea id="notes" name="notes" rows="3">{{ project['notes'] if project else '' }}</textarea>
+      </label>
+      <div class="actions-row" style="margin-top:4px">
+        <button type="submit" class="btn btn-primary">Save</button>
+        {% if project %}
+          <a class="btn btn-ghost" href="{{ url_for('projects.overview', project_id=project['id']) }}">Cancel</a>
+        {% else %}
+          <a class="btn btn-ghost" href="{{ url_for('projects.list_projects') }}">Cancel</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if project %}
+<div class="card mt-16" style="max-width:720px">
+  <div class="card-header"><h2 class="card-title">Archive</h2></div>
+  <div class="card-body">
+    {% if not project['archived'] %}
+    <form method="post" action="{{ url_for('projects.archive', project_id=project['id']) }}"
+          onsubmit="return confirm('Archive this project? It will be hidden from the list but nothing is deleted.');">
+      <div class="actions-row" style="margin-top:0">
+        <button type="submit" class="btn btn-danger">Archive project</button>
+        <span class="muted">Hidden from the list; nothing is deleted (FR-G3).</span>
+      </div>
+    </form>
+    {% else %}
+    <form method="post" action="{{ url_for('projects.unarchive', project_id=project['id']) }}">
+      <div class="actions-row" style="margin-top:0">
+        <button type="submit" class="btn">Restore project</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

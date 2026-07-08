@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon %}
+{% block title %}Requirement report — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Material Requirement Report</h1>
+    <p class="page-sub">R1 / FR-T1 — all requirement lines with status and basis notes.</p>
+  </div>
+  <div class="page-actions no-print">
+    <a class="btn btn-ghost" href="{{ url_for('requirements.list_requirements', project_id=project['id']) }}">Back</a>
+    <button onclick="window.print()" class="btn btn-primary">{{ icon('print', 14) }}Print / Save PDF</button>
+  </div>
+</div>
+
+<div class="print-sheet">
+  <header class="letterhead">
+    <div class="who">
+      <div class="logo-mark lg">SS</div>
+      <div>
+        <div class="co">{{ company_name }}</div>
+        <div class="co-sub">Authorised Tostem Partner · Aluminium Windows</div>
+      </div>
+    </div>
+    <div class="doc">
+      <div class="doc-title">Requirement Report</div>
+      <div class="doc-meta">{{ today | ddmmyyyy }}</div>
+    </div>
+  </header>
+
+  <dl class="sheet-block">
+    <div class="kv"><dt>Project</dt><dd>{{ project['name'] }}</dd></div>
+    <div class="kv"><dt>Client</dt><dd>{{ project['client_name'] }}</dd></div>
+  </dl>
+
+  <h3 class="sheet-h">Requirement lines</h3>
+  <table class="sheet-tbl">
+    <thead>
+      <tr><th>#</th><th>Material</th><th>Category</th><th>Source</th>
+          <th class="num">Required qty</th><th>UoM</th><th>Basis note</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for l in lines %}
+      <tr>
+        <td style="color:var(--slate-500)">{{ loop.index }}</td>
+        <td style="font-weight:500;color:var(--slate-900)">{{ l['material_name'] }}</td>
+        <td>{{ l['category'] }}</td>
+        <td>{{ 'Tostem' if l['supply_source'] == 'Tostem-supplied' else 'Vendor' }}</td>
+        <td class="num" style="font-weight:600;color:var(--slate-900)">{{ l['required_qty'] | qty }}</td>
+        <td>{{ l['uom'] }}</td>
+        <td>{{ l['basis_note'] or '—' }}</td>
+        <td>{{ l['status'] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8">No requirement lines.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p class="sheet-note">Auto lines are formula-calculated (parameters recorded in the basis note);
+    manual lines are typed in.</p>
+</div>
+{% endblock %}

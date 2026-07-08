@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, badge, source_badge %}
+{% block title %}Coverage — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Coverage</h1>
+    <p class="page-sub">Required vs ordered vs received vs issued vs on hand, per material. The primary planning view (W10).</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-ghost" href="{{ url_for('projects.edit', project_id=project['id']) }}">{{ icon('edit', 14) }}Edit project</a>
+    <a class="btn" href="{{ url_for('reports.coverage_report', project_id=project['id']) }}">{{ icon('print', 14) }}Print coverage report</a>
+    <a class="btn btn-primary" href="{{ url_for('reports.tostem_requisition', project_id=project['id']) }}">{{ icon('report', 14) }}Tostem requisition</a>
+  </div>
+</div>
+
+{% set shortfall_count = coverage | selectattr('to_order_gap', '>', 0) | list | length %}
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-label">Materials tracked</div>
+    <div class="kpi-value">{{ coverage | length }}</div>
+    <div class="kpi-sub">{{ counts['requirements'] }} requirement line(s) · {{ counts['approved'] }} approved</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Shortfalls</div>
+    <div class="kpi-value {{ 'bad' if shortfall_count > 0 }}">{{ shortfall_count }}</div>
+    <div class="kpi-sub">to-order gap &gt; 0</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Purchase orders</div>
+    <div class="kpi-value">{{ counts['pos'] }}</div>
+    <div class="kpi-sub">on this project</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Windows on schedule</div>
+    <div class="kpi-value">{{ summary['window_count'] }}</div>
+    <div class="kpi-sub">{{ summary['line_count'] }} opening line(s)</div>
+  </div>
+</div>
+
+{% if coverage %}
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Material</th><th>Source</th><th>UoM</th>
+          <th class="num">Required</th><th class="num">Ordered</th><th class="num">Received</th>
+          <th class="num">Issued</th><th class="num">On hand</th><th class="num">To-order gap</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in coverage %}
+        <tr {% if row['to_order_gap'] > 0 %}class="shortfall"{% endif %}>
+          <td class="cell-strong">{{ row['name'] }}</td>
+          <td>{{ source_badge(row['supply_source']) }}</td>
+          <td class="cell-muted">{{ row['uom'] }}</td>
+          <td class="num cell-strong">{{ row['required'] | qty }}</td>
+          <td class="num">{{ row['ordered'] | qty }}</td>
+          <td class="num">{{ row['received'] | qty }}</td>
+          <td class="num">{{ row['issued'] | qty }}</td>
+          <td class="num {{ 'cell-dim' if row['on_hand'] == 0 else 'cell-strong' }}">{{ row['on_hand'] | qty }}</td>
+          <td class="num">
+            {% if row['to_order_gap'] > 0 %}
+              <span class="gap-chip">{{ icon('warn', 11) }}{{ row['to_order_gap'] | qty }} {{ row['uom'] }}</span>
+              {% if row['supply_source'] == 'Tostem-supplied' %}
+                <span class="cell-dim" style="font-size:11px">via requisition</span>
+              {% endif %}
+            {% else %}
+              <span class="status-ok">{{ icon('check', 11) }}covered</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="footnote">
+  To-order gap = max(0, Required − Ordered) · Ordered counts issued POs; draft and cancelled POs are
+  excluded · On hand = Σ receipts − Σ issues ± adjustments, derived from the stock ledger (never stored).
+  Tostem-supplied materials are ordered via the Tostem requisition, not a vendor PO.
+</p>
+{% else %}
+<div class="card">
+  <div class="card-body">
+    No materials on this project yet. Add requirement lines under
+    <a href="{{ url_for('requirements.list_requirements', project_id=project['id']) }}">Materials</a>.
+  </div>
+</div>
+{% endif %}
+
+{% if project['notes'] %}
+<div class="card mt-16">
+  <div class="card-header"><h2 class="card-title">Notes</h2></div>
+  <div class="card-body">{{ project['notes'] }}</div>
+</div>
+{% endif %}
+{% endblock %}

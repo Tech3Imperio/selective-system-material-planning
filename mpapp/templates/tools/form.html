@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Edit tool line — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Edit tool requirement line</h1>
+    <p class="page-sub">Tool / PPE requirement — quantities are manual and depend on crew and duration.</p>
+  </div>
+</div>
+
+<div class="card" style="max-width:600px">
+  <div class="card-body">
+    <form method="post" class="form-stack wide">
+      <label class="field">
+        <span class="field-label">Tool<span class="req">*</span></span>
+        <select id="material_id" name="material_id" required>
+          {% for t in tools %}
+            <option value="{{ t['id'] }}" {% if t['id'] == line['material_id'] %}selected{% endif %}>
+              {{ t['name'] }} ({{ t['uom'] }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Required quantity<span class="req">*</span></span>
+        <input type="text" id="required_qty" name="required_qty" required inputmode="decimal"
+               value="{{ line['required_qty'] | qty }}">
+      </label>
+      <label class="field">
+        <span class="field-label">Basis note</span>
+        <input type="text" id="basis_note" name="basis_note" value="{{ line['basis_note'] or '' }}">
+      </label>
+      <div class="actions-row" style="margin-top:4px">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a class="btn btn-ghost" href="{{ url_for('tools.list_tools', project_id=project['id']) }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

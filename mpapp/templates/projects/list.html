@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, badge, status_badge %}
+{% block title %}Projects{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Projects</h1>
+    <p class="page-sub">Each project scopes its own window schedule, requirements, POs and stock ledger.</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-primary" href="{{ url_for('projects.new') }}">{{ icon('plus', 14) }}New project</a>
+  </div>
+</div>
+
+<form method="get" class="filter-bar">
+  <label class="field w-44">
+    <span class="field-label">Search</span>
+    <input type="text" id="q" name="q" value="{{ q }}" placeholder="name or client">
+  </label>
+  <label class="field w-36">
+    <span class="field-label">Status</span>
+    <select id="status" name="status">
+      <option value="">All</option>
+      {% for s in statuses %}
+        <option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field" style="display:flex;align-items:center;gap:6px;padding-bottom:6px">
+    <input type="checkbox" name="show_archived" value="1" {% if show_archived %}checked{% endif %} style="width:auto">
+    <span class="field-label" style="margin:0">show archived</span>
+  </label>
+  <button type="submit" class="btn">{{ icon('filter', 14) }}Apply</button>
+</form>
+
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr><th>Name</th><th>Client</th><th>Status</th><th>Start</th><th>Expected end</th>
+            <th class="num">Crew</th><th style="width:60px"></th></tr>
+      </thead>
+      <tbody>
+        {% for p in projects %}
+        <tr>
+          <td>
+            <a class="cell-strong" href="{{ url_for('projects.overview', project_id=p['id']) }}">{{ p['name'] }}</a>
+            {% if p['archived'] %}{{ badge('closed', 'Archived') }}{% endif %}
+          </td>
+          <td>{{ p['client_name'] }}</td>
+          <td>{{ status_badge(p['status']) }}</td>
+          <td class="cell-muted">{{ p['start_date'] | ddmmyyyy or '—' }}</td>
+          <td class="cell-muted">{{ p['expected_end_date'] | ddmmyyyy or '—' }}</td>
+          <td class="num">{{ p['crew_size'] or '—' }}</td>
+          <td>
+            <div class="row-actions">
+              <a class="icon-btn" title="Edit project" href="{{ url_for('projects.edit', project_id=p['id']) }}">{{ icon('edit', 14) }}</a>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="cell-muted">No projects yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

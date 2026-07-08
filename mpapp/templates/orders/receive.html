@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, status_badge %}
+{% block title %}Receive — {{ po['po_number'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Receive materials — {{ po['po_number'] }} {{ status_badge(po['status']) }}</h1>
+    <p class="page-sub">{{ po['project_name'] }} · Vendor {{ po['vendor_name'] }}. Partial receipts are allowed —
+      leave a line blank to skip it. Receipts post straight to the project stock ledger.</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-ghost" href="{{ url_for('orders.detail', po_id=po['id']) }}">Back to PO</a>
+  </div>
+</div>
+
+<form method="post">
+  <div class="card mb-16">
+    <div class="card-body">
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">Receipt date</span>
+          <input type="date" id="date" name="date" value="{{ receipt_date }}">
+        </label>
+        <label class="field span-2">
+          <span class="field-label">Note (optional)</span>
+          <input type="text" id="note" name="note" value="{{ note }}">
+        </label>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead>
+          <tr><th>Material</th><th class="num">Ordered</th><th class="num">Received so far</th>
+              <th class="num">Outstanding</th><th class="num" style="width:120px">Receive now</th></tr>
+        </thead>
+        <tbody>
+          {% for l in lines %}
+          <tr>
+            <td class="cell-strong">{{ l['material_name'] }} <span class="cell-muted">({{ l['uom'] }})</span></td>
+            <td class="num">{{ l['qty'] | qty }}</td>
+            <td class="num">{{ l['received_qty'] | qty }}</td>
+            <td class="num cell-strong">{{ (l['qty'] - l['received_qty'] if l['qty'] > l['received_qty'] else 0) | qty }}</td>
+            <td class="num"><input type="text" name="qty_{{ l['id'] }}" class="cell-input" inputmode="decimal"
+                                   value="{{ entered.get('qty_' ~ l['id'], '') }}"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if needs_over_confirm %}
+  <div class="banner banner-warn">
+    {{ icon('warn', 14) }}
+    <div>
+      <label style="display:flex;align-items:center;gap:6px">
+        <input type="checkbox" name="confirm_over" value="1" style="width:auto">
+        I confirm the over-receipt quantities above (received more than ordered — FR-S1).
+      </label>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="actions-row">
+    <button type="submit" class="btn btn-primary">{{ icon('check', 14) }}Record receipt</button>
+    <a class="btn btn-ghost" href="{{ url_for('orders.detail', po_id=po['id']) }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

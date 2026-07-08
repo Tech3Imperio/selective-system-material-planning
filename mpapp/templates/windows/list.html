@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, badge, status_badge %}
+{% block title %}Windows — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Window Schedule</h1>
+    <p class="page-sub">Reference data for the Tostem order. Height, width and configuration are captured for the Phase 2 formula engine.</p>
+  </div>
+  <div class="page-actions no-print">
+    <a class="btn" href="{{ url_for('windows.import_template') }}">{{ icon('download', 14) }}CSV template</a>
+    <a class="btn" href="{{ url_for('windows.import_template_xlsx') }}">{{ icon('download', 14) }}XLSX template</a>
+    <a class="btn" href="{{ url_for('windows.import_upload', project_id=project['id']) }}">{{ icon('upload', 14) }}Import CSV / XLSX</a>
+    <a class="btn btn-primary" href="#add-line">{{ icon('plus', 14) }}Add window line</a>
+  </div>
+</div>
+
+{# Summary strip (FR-W5) #}
+<div class="stat-strip">
+  <div class="stat-card">
+    <span class="stat-value">{{ summary['line_count'] }}</span>
+    <span class="stat-label">openings</span>
+    <span class="stat-sep">|</span>
+    <span class="stat-value">{{ summary['window_count'] }}</span>
+    <span class="stat-label">windows</span>
+  </div>
+  {% for c in summary['per_config'] %}
+  <div class="stat-card" title="{{ c['name'] }}">
+    <span class="chip">{{ c['code'] }}</span>
+    <span class="stat-label"><strong style="color:var(--slate-800)">{{ c['window_count'] }}</strong> windows</span>
+  </div>
+  {% endfor %}
+</div>
+
+{# Add line form (W2 · FR-W1/W3) #}
+<form method="post" action="{{ url_for('windows.add_window', project_id=project['id']) }}" class="no-print" id="add-line">
+  <div class="card mb-16">
+    <div class="card-header"><h2 class="card-title">Add window line</h2></div>
+    <div class="card-body">
+      <div class="form-grid cols-8">
+        <label class="field">
+          <span class="field-label">Opening ref<span class="req">*</span></span>
+          <input type="text" name="opening_ref" required placeholder="W-106">
+        </label>
+        <label class="field span-2">
+          <span class="field-label">Location</span>
+          <input type="text" name="location" placeholder="Floor, room">
+        </label>
+        <label class="field">
+          <span class="field-label">Configuration<span class="req">*</span></span>
+          <select name="config_type_id" id="config-select" onchange="toggleNewConfig(this)">
+            <option value="">— select —</option>
+            {% for c in configs %}
+              <option value="{{ c['id'] }}">{{ c['code'] }} — {{ c['name'] }}</option>
+            {% endfor %}
+            <option value="__new">＋ New configuration…</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Width (mm)<span class="req">*</span></span>
+          <input type="text" name="width_mm" required inputmode="decimal" placeholder="2400">
+        </label>
+        <label class="field">
+          <span class="field-label">Height (mm)<span class="req">*</span></span>
+          <input type="text" name="height_mm" required inputmode="decimal" placeholder="1500">
+        </label>
+        <label class="field">
+          <span class="field-label">Quantity<span class="req">*</span></span>
+          <input type="number" name="quantity" min="1" required placeholder="1">
+        </label>
+        <label class="field">
+          <span class="field-label">Tostem order ref</span>
+          <input type="text" name="tostem_order_ref" placeholder="TS-8841">
+        </label>
+        <label class="field span-2">
+          <span class="field-label">Remarks</span>
+          <input type="text" name="remarks">
+        </label>
+        <div class="field">
+          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">Save line</button>
+        </div>
+      </div>
+      {# Inline new-configuration fields (FR-W3), shown when "＋ New configuration…" is picked #}
+      <div id="new-config" style="display:none; margin-top:12px; border-top:1px solid var(--slate-100); padding-top:12px;">
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">New config code<span class="req">*</span></span>
+            <input type="text" name="new_config_code" placeholder="e.g. 2T2P">
+          </label>
+          <label class="field">
+            <span class="field-label">New config name</span>
+            <input type="text" name="new_config_name" placeholder="e.g. 2 Track 2 Panel Sliding">
+          </label>
+          <label class="field">
+            <span class="field-label">Tracks</span>
+            <input type="number" name="new_config_tracks" min="0">
+          </label>
+          <label class="field">
+            <span class="field-label">Panels</span>
+            <input type="number" name="new_config_panels" min="0">
+          </label>
+        </div>
+        <span class="hint" style="display:block;margin-top:6px">The new configuration is created with this line and added to the catalog.</span>
+      </div>
+    </div>
+  </div>
+</form>
+
+{# Schedule table #}
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Opening ref</th><th>Location</th><th>Config</th>
+          <th class="num">Width mm</th><th class="num">Height mm</th><th class="num">Qty</th>
+          <th>Tostem order</th><th>Source</th><th>Remarks</th><th class="no-print" style="width:96px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in lines %}
+        <tr>
+          <td class="cell-strong">{{ w['opening_ref'] }}</td>
+          <td>{{ w['location'] or '—' }}</td>
+          <td><span class="chip">{{ w['config_code'] }}</span></td>
+          <td class="num">{{ w['width_mm'] | qty }}</td>
+          <td class="num">{{ w['height_mm'] | qty }}</td>
+          <td class="num cell-strong">{{ w['quantity'] }}</td>
+          <td class="cell-muted">{{ w['tostem_order_ref'] or '—' }}</td>
+          <td>{{ badge('vendor' if w['source'] == 'Imported' else 'draft', w['source']) }}</td>
+          <td class="cell-note">{{ w['remarks'] or '—' }}</td>
+          <td class="no-print">
+            <div class="row-actions">
+              <form method="post" class="inline"
+                    action="{{ url_for('windows.duplicate_window', project_id=project['id'], line_id=w['id']) }}">
+                <button type="submit" class="icon-btn" title="Duplicate line">{{ icon('duplicate', 14) }}</button>
+              </form>
+              <a class="icon-btn" title="Edit"
+                 href="{{ url_for('windows.edit_window', project_id=project['id'], line_id=w['id']) }}">{{ icon('edit', 14) }}</a>
+              <form method="post" class="inline"
+                    action="{{ url_for('windows.delete_window', project_id=project['id'], line_id=w['id']) }}"
+                    onsubmit="return confirm('Delete this window line?');">
+                <button type="submit" class="icon-btn danger" title="Delete">{{ icon('trash', 14) }}</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="cell-muted">No window lines yet — add one above or import from a file.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="tbl-foot">
+    <span>
+      {% if imports %}
+        {% set last = imports[0] %}
+        Source file: <a href="{{ url_for('windows.import_download', project_id=project['id'], import_id=last['id']) }}">{{ last['filename'] }}</a>
+        · uploaded {{ last['uploaded_at'] }} · {{ last['rows_imported'] }} rows imported, {{ last['rows_rejected'] }} rejected
+      {% else %}
+        No files imported yet.
+      {% endif %}
+    </span>
+    <span>{{ lines | length }} lines</span>
+  </div>
+</div>
+
+{% if imports %}
+<div class="card mt-16">
+  <div class="card-header"><h2 class="card-title">Imported files (§7.9)</h2></div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr><th>File</th><th>Uploaded</th><th>Status</th>
+            <th class="num">Imported</th><th class="num">Rejected</th><th class="no-print"></th></tr>
+      </thead>
+      <tbody>
+        {% for i in imports %}
+        <tr>
+          <td><a href="{{ url_for('windows.import_download', project_id=project['id'], import_id=i['id']) }}">{{ i['filename'] }}</a></td>
+          <td class="cell-muted">{{ i['uploaded_at'] }}</td>
+          <td>{{ status_badge(i['status']) }}</td>
+          <td class="num">{{ i['rows_imported'] }}</td>
+          <td class="num">{{ i['rows_rejected'] }}</td>
+          <td class="no-print">
+            {% if i['status'] == 'Pending' %}
+              <a class="btn btn-xs" href="{{ url_for('windows.import_review', project_id=project['id'], import_id=i['id']) }}">Review</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<script>
+  function toggleNewConfig(sel) {
+    var panel = document.getElementById('new-config');
+    var isNew = sel.value === '__new';
+    panel.style.display = isNew ? 'block' : 'none';
+    var code = panel.querySelector('[name=new_config_code]');
+    if (isNew) { code.focus(); } else { code.value = ''; }
+  }
+</script>
+{% endblock %}

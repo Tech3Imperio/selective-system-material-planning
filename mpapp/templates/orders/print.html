@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, status_badge %}
+{% block title %}{{ po['po_number'] }} (print){% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Purchase Order — printable</h1>
+    <p class="page-sub">R3 / FR-O5. Use the browser's Print → Save as PDF.</p>
+  </div>
+  <div class="page-actions no-print">
+    <a class="btn btn-ghost" href="{{ url_for('orders.detail', po_id=po['id']) }}">Back to PO</a>
+    <button onclick="window.print()" class="btn btn-primary">{{ icon('print', 14) }}Print / Save PDF</button>
+  </div>
+</div>
+
+<div class="print-sheet">
+  <header class="letterhead">
+    <div class="who">
+      <div class="logo-mark lg">SS</div>
+      <div>
+        <div class="co">{{ company_name }}</div>
+        <div class="co-sub">Authorised Tostem Partner · Aluminium Windows</div>
+      </div>
+    </div>
+    <div class="doc">
+      <div class="doc-title">Purchase Order</div>
+      <div class="doc-meta">{{ po['po_number'] }} · {{ po['order_date'] | ddmmyyyy }}</div>
+    </div>
+  </header>
+
+  <dl class="sheet-block">
+    <div class="kv"><dt>Project</dt><dd>{{ po['project_name'] }}</dd></div>
+    <div class="kv"><dt>Status</dt><dd>{{ po['status'] }}</dd></div>
+    <div class="kv"><dt>Order date</dt><dd>{{ po['order_date'] | ddmmyyyy }}</dd></div>
+    <div class="kv"><dt>Expected delivery</dt><dd>{{ po['expected_delivery'] | ddmmyyyy or '—' }}</dd></div>
+  </dl>
+
+  <h3 class="sheet-h">Vendor</h3>
+  <dl class="sheet-block" style="margin-top:8px">
+    <div class="kv"><dt>Name</dt><dd><strong>{{ vendor['name'] }}</strong></dd></div>
+    {% if vendor['contact_person'] %}<div class="kv"><dt>Contact</dt><dd>{{ vendor['contact_person'] }}</dd></div>{% endif %}
+    {% if vendor['phone'] %}<div class="kv"><dt>Phone</dt><dd>{{ vendor['phone'] }}</dd></div>{% endif %}
+    {% if vendor['email'] %}<div class="kv"><dt>Email</dt><dd>{{ vendor['email'] }}</dd></div>{% endif %}
+    {% if vendor['address'] %}<div class="kv"><dt>Address</dt><dd>{{ vendor['address'] }}</dd></div>{% endif %}
+  </dl>
+
+  <h3 class="sheet-h">Order lines</h3>
+  <table class="sheet-tbl">
+    <thead>
+      <tr><th>#</th><th>Material</th><th class="num">Qty</th><th>UoM</th>
+          {% if has_rates %}<th class="num">Rate (₹)</th><th class="num">Amount (₹)</th>{% endif %}</tr>
+    </thead>
+    <tbody>
+      {% for l in lines %}
+      <tr>
+        <td style="color:var(--slate-500)">{{ loop.index }}</td>
+        <td style="font-weight:500;color:var(--slate-900)">{{ l['material_name'] }}</td>
+        <td class="num" style="font-weight:600;color:var(--slate-900)">{{ l['qty'] | qty }}</td>
+        <td>{{ l['uom'] }}</td>
+        {% if has_rates %}
+        <td class="num">{{ l['rate'] | qty if l['rate'] is not none else '' }}</td>
+        <td class="num">{{ l['amount'] | money if l['amount'] is not none else '' }}</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+      {% if has_rates %}
+      <tr>
+        <td colspan="5" style="font-weight:600;color:var(--slate-900)">Total</td>
+        <td class="num" style="font-weight:600;color:var(--slate-900)">{{ total | money }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  {% if po['terms_notes'] %}
+  <h3 class="sheet-h">Terms / notes</h3>
+  <p class="sheet-note" style="margin-top:4px">{{ po['terms_notes'] }}</p>
+  {% endif %}
+
+  <p class="sheet-note">Rates are optional record-keeping (FR-O6); amounts appear only where rates were entered.</p>
+
+  <div class="sig-grid">
+    <div>Prepared by</div>
+    <div>Authorised by (Owner)</div>
+    <div>Date</div>
+  </div>
+</div>
+{% endblock %}

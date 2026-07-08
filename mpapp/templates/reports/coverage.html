@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon %}
+{% block title %}Coverage — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Coverage / Shortfall Report</h1>
+    <p class="page-sub">R2 / FR-T2 — printable snapshot of the coverage view.</p>
+  </div>
+  <div class="page-actions no-print">
+    <a class="btn btn-ghost" href="{{ url_for('projects.overview', project_id=project['id']) }}">Back</a>
+    <button onclick="window.print()" class="btn btn-primary">{{ icon('print', 14) }}Print / Save PDF</button>
+  </div>
+</div>
+
+<div class="print-sheet">
+  <header class="letterhead">
+    <div class="who">
+      <div class="logo-mark lg">SS</div>
+      <div>
+        <div class="co">{{ company_name }}</div>
+        <div class="co-sub">Authorised Tostem Partner · Aluminium Windows</div>
+      </div>
+    </div>
+    <div class="doc">
+      <div class="doc-title">Coverage Report</div>
+      <div class="doc-meta">{{ today | ddmmyyyy }}</div>
+    </div>
+  </header>
+
+  <dl class="sheet-block">
+    <div class="kv"><dt>Project</dt><dd>{{ project['name'] }}</dd></div>
+    <div class="kv"><dt>Client</dt><dd>{{ project['client_name'] }}</dd></div>
+  </dl>
+
+  <h3 class="sheet-h">Coverage by material</h3>
+  <table class="sheet-tbl">
+    <thead>
+      <tr>
+        <th>Material</th><th>UoM</th><th>Source</th>
+        <th class="num">Required</th><th class="num">Ordered</th><th class="num">Received</th>
+        <th class="num">Issued</th><th class="num">On hand</th><th class="num">To-order gap</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in coverage %}
+      <tr {% if row['to_order_gap'] > 0 %}style="background:var(--red-50)"{% endif %}>
+        <td style="font-weight:500;color:var(--slate-900)">{{ row['name'] }}</td>
+        <td>{{ row['uom'] }}</td>
+        <td>{{ 'Tostem' if row['supply_source'] == 'Tostem-supplied' else 'Vendor' }}</td>
+        <td class="num">{{ row['required'] | qty }}</td>
+        <td class="num">{{ row['ordered'] | qty }}</td>
+        <td class="num">{{ row['received'] | qty }}</td>
+        <td class="num">{{ row['issued'] | qty }}</td>
+        <td class="num">{{ row['on_hand'] | qty }}</td>
+        <td class="num" {% if row['to_order_gap'] > 0 %}style="font-weight:600;color:var(--red-700)"{% endif %}>
+          {{ row['to_order_gap'] | qty }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9">Nothing to report yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p class="sheet-note">To-order gap = max(0, Required − Ordered). Highlighted rows have a shortfall.
+    Ordered counts issued POs; draft and cancelled POs are excluded.</p>
+</div>
+{% endblock %}

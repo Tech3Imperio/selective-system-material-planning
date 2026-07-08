@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon %}
+{% block title %}Review import — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Review import: {{ imp['filename'] }}</h1>
+    <p class="page-sub"><strong>{{ valid_count }}</strong> valid row(s),
+      <strong>{{ invalid_count }}</strong> invalid row(s). Only valid rows will be imported;
+      invalid rows are rejected (AC1).</p>
+  </div>
+  <div class="page-actions">
+    <form method="post" class="inline" action="{{ url_for('windows.import_discard', project_id=project['id'], import_id=imp['id']) }}">
+      <button type="submit" class="btn btn-danger">Discard import</button>
+    </form>
+    <form method="post" class="inline" action="{{ url_for('windows.import_confirm', project_id=project['id'], import_id=imp['id']) }}">
+      <button type="submit" class="btn btn-primary" {% if valid_count == 0 %}disabled{% endif %}>
+        {{ icon('check', 14) }}Import {{ valid_count }} valid row(s)</button>
+    </form>
+  </div>
+</div>
+
+{% if unknown_codes %}
+<div class="banner banner-warn">
+  {{ icon('warn', 14) }}
+  <div>
+    <strong>Unknown configuration codes found.</strong> Create them with one click, then the rows revalidate:
+    {% for code in unknown_codes %}
+    <form method="post" action="{{ url_for('catalog.config_quick_create') }}" class="inline" style="margin-left:6px">
+      <input type="hidden" name="code" value="{{ code }}">
+      <input type="hidden" name="next"
+             value="{{ url_for('windows.import_review', project_id=project['id'], import_id=imp['id']) }}">
+      <button type="submit" class="btn btn-xs">Create config '{{ code }}'</button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr><th>#</th><th>Opening Ref</th><th>Location</th><th>Config Code</th>
+            <th class="num">Width mm</th><th class="num">Height mm</th><th class="num">Qty</th>
+            <th>Remarks</th><th>Validation</th></tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr {% if r['errors'] %}class="shortfall"{% endif %}>
+          <td class="cell-muted">{{ r['row_no'] }}</td>
+          <td class="cell-strong">{{ r['opening_ref'] }}</td>
+          <td>{{ r['location'] }}</td>
+          <td>{% if r['config_code'] %}<span class="chip">{{ r['config_code'] }}</span>{% endif %}</td>
+          <td class="num">{{ r['width_mm'] }}</td>
+          <td class="num">{{ r['height_mm'] }}</td>
+          <td class="num">{{ r['quantity'] }}</td>
+          <td class="cell-note">{{ r['remarks'] }}</td>
+          <td>
+            {% if r['errors'] %}
+              <span class="status-warn">{{ icon('warn', 11) }}{{ r['errors'] | join('; ') }}</span>
+            {% else %}
+              <span class="status-ok">{{ icon('check', 11) }}OK</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

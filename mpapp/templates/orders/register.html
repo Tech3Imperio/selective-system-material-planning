@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, status_badge %}
+{% block title %}PO register{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Purchase Orders</h1>
+    <p class="page-sub">Register of vendor purchase orders{% if project_id %} for this project{% else %} across all projects{% endif %} (FR-T5).
+      Lifecycle: Draft → Issued → Partially Received → Received → Closed.</p>
+  </div>
+</div>
+
+<form method="get" class="filter-bar no-print">
+  {% if project_id %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
+  <label class="field w-36">
+    <span class="field-label">Status</span>
+    <select id="status" name="status">
+      <option value="">All</option>
+      {% for s in ['Draft', 'Issued', 'Partially Received', 'Received', 'Closed', 'Cancelled'] %}
+        <option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field w-44">
+    <span class="field-label">Vendor</span>
+    <select id="vendor_id" name="vendor_id">
+      <option value="">All</option>
+      {% for v in vendors %}
+        <option value="{{ v['id'] }}" {% if vendor_id == v['id']|string %}selected{% endif %}>{{ v['name'] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% if not project_id %}
+  <label class="field w-44">
+    <span class="field-label">Project</span>
+    <select id="project_id" name="project_id">
+      <option value="">All</option>
+      {% for p in projects %}
+        <option value="{{ p['id'] }}" {% if project_id == p['id']|string %}selected{% endif %}>{{ p['name'] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  <button type="submit" class="btn">{{ icon('filter', 14) }}Apply</button>
+</form>
+
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr><th>PO number</th><th>Project</th><th>Vendor</th><th>Order date</th>
+            <th>Expected delivery</th><th>Status</th><th class="num">Lines</th><th class="num">Amount (₹)</th></tr>
+      </thead>
+      <tbody>
+        {% for po in pos %}
+        <tr>
+          <td><a class="cell-strong" href="{{ url_for('orders.detail', po_id=po['id']) }}">{{ po['po_number'] }}</a></td>
+          <td>{{ po['project_name'] }}</td>
+          <td>{{ po['vendor_name'] }}</td>
+          <td class="cell-muted">{{ po['order_date'] | ddmmyyyy }}</td>
+          <td class="cell-muted">{{ po['expected_delivery'] | ddmmyyyy or '—' }}</td>
+          <td>{{ status_badge(po['status']) }}</td>
+          <td class="num">{{ po['line_count'] }}</td>
+          <td class="num">{{ po['total_amount'] | money if po['total_amount'] is not none else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="cell-muted">No purchase orders match.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="tbl-foot">
+    <span>Rates are optional record-keeping (FR-O6); amounts appear only where rates were entered.</span>
+    <span>{{ pos | length }} POs</span>
+  </div>
+</div>
+{% endblock %}

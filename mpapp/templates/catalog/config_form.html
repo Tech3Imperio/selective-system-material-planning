@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit configuration' if config else 'New configuration' }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">{{ 'Edit configuration type' if config else 'New configuration type' }}</h1>
+  </div>
+</div>
+
+<div class="card" style="max-width:720px">
+  <div class="card-body">
+    <form method="post" class="form-stack wide">
+      <div class="form-grid" style="grid-template-columns:repeat(2, 1fr)">
+        <label class="field">
+          <span class="field-label">Code<span class="req">*</span></span>
+          <input type="text" id="code" name="code" required value="{{ config['code'] if config else '' }}">
+          <span class="hint">Unique, e.g. 3T3P</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Name<span class="req">*</span></span>
+          <input type="text" id="name" name="name" required value="{{ config['name'] if config else '' }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Tracks</span>
+          <input type="number" id="tracks" name="tracks" min="0" value="{{ config['tracks'] if config and config['tracks'] is not none else '' }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Panels</span>
+          <input type="number" id="panels" name="panels" min="0" value="{{ config['panels'] if config and config['panels'] is not none else '' }}">
+        </label>
+      </div>
+      <label class="field">
+        <span class="field-label">Description</span>
+        <textarea id="description" name="description" rows="2">{{ config['description'] if config else '' }}</textarea>
+      </label>
+      <div class="actions-row" style="margin-top:4px">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a class="btn btn-ghost" href="{{ url_for('catalog.configs') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

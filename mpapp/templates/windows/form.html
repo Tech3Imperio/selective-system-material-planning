@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Edit window line — {{ project['name'] }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Edit window line</h1>
+    <p class="page-sub">{{ line['opening_ref'] }} · configuration, size and quantity feed the Phase 2 formula engine.</p>
+  </div>
+</div>
+
+<div class="card" style="max-width:720px">
+  <div class="card-body">
+    <form method="post" class="form-stack wide">
+      <div class="form-grid" style="grid-template-columns:repeat(2, 1fr)">
+        <label class="field">
+          <span class="field-label">Opening ref<span class="req">*</span></span>
+          <input type="text" id="opening_ref" name="opening_ref" required value="{{ line['opening_ref'] }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Location</span>
+          <input type="text" id="location" name="location" value="{{ line['location'] or '' }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Configuration<span class="req">*</span></span>
+          <select id="config_type_id" name="config_type_id">
+            {% for c in configs %}
+              <option value="{{ c['id'] }}" {% if c['id'] == line['config_type_id'] %}selected{% endif %}>
+                {{ c['code'] }} — {{ c['name'] }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Quantity<span class="req">*</span></span>
+          <input type="number" id="quantity" name="quantity" min="1" required value="{{ line['quantity'] }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Width (mm)<span class="req">*</span></span>
+          <input type="text" id="width_mm" name="width_mm" required inputmode="decimal" value="{{ line['width_mm'] | qty }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Height (mm)<span class="req">*</span></span>
+          <input type="text" id="height_mm" name="height_mm" required inputmode="decimal" value="{{ line['height_mm'] | qty }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Tostem order ref</span>
+          <input type="text" id="tostem_order_ref" name="tostem_order_ref" value="{{ line['tostem_order_ref'] or '' }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Remarks</span>
+          <input type="text" id="remarks" name="remarks" value="{{ line['remarks'] or '' }}">
+        </label>
+      </div>
+      <div class="form-grid" style="grid-template-columns:repeat(2, 1fr); border-top:1px solid var(--slate-100); padding-top:12px">
+        <label class="field">
+          <span class="field-label">…or add a new config inline (code)</span>
+          <input type="text" id="new_config_code" name="new_config_code" placeholder="e.g. 2T2P">
+          <span class="hint">Used instead of the selection above</span>
+        </label>
+        <label class="field">
+          <span class="field-label">New config name</span>
+          <input type="text" id="new_config_name" name="new_config_name">
+        </label>
+      </div>
+      <div class="actions-row" style="margin-top:4px">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a class="btn btn-ghost" href="{{ url_for('windows.list_windows', project_id=project['id']) }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

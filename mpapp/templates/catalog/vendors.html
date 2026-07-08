@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, badge %}
+{% block title %}Vendors{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Vendors</h1>
+    <p class="page-sub">Vendor contacts for purchase orders. Set a default vendor per material in the catalog.</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn" href="{{ url_for('catalog.vendors', show_inactive=0 if show_inactive else 1) }}">
+      {{ 'Hide' if show_inactive else 'Show' }} inactive</a>
+    <a class="btn btn-primary" href="{{ url_for('catalog.vendor_new') }}">{{ icon('plus', 14) }}New vendor</a>
+  </div>
+</div>
+
+<div class="tbl-card">
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr><th>Name</th><th>Contact</th><th>Phone</th><th>Email</th><th>Active</th><th style="width:100px"></th></tr>
+      </thead>
+      <tbody>
+        {% for v in vendors %}
+        <tr>
+          <td class="cell-strong">{{ v['name'] }}</td>
+          <td class="cell-muted">{{ v['contact_person'] or '—' }}</td>
+          <td class="cell-muted">{{ v['phone'] or '—' }}</td>
+          <td class="cell-muted">{{ v['email'] or '—' }}</td>
+          <td>{{ badge('approved', 'Active') if v['active'] else badge('closed', 'Inactive') }}</td>
+          <td>
+            <div class="row-actions">
+              <a class="icon-btn" title="Edit" href="{{ url_for('catalog.vendor_edit', vendor_id=v['id']) }}">{{ icon('edit', 14) }}</a>
+              <form method="post" class="inline" action="{{ url_for('catalog.vendor_toggle', vendor_id=v['id']) }}">
+                <button type="submit" class="btn btn-ghost btn-xs">{{ 'Deactivate' if v['active'] else 'Reactivate' }}</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="cell-muted">No vendors yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
