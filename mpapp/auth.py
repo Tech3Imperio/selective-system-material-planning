@@ -62,6 +62,8 @@ def logout():
 
 @bp.route('/settings', methods=('GET', 'POST'))
 def settings():
+    from .services import get_app_settings
+
     db = get_db()
     if request.method == 'POST':
         current = request.form.get('current_password', '')
@@ -81,4 +83,16 @@ def settings():
             db.commit()
             flash('Password updated.', 'success')
             return redirect(url_for('auth.settings'))
-    return render_template('auth/settings.html')
+    return render_template('auth/settings.html', settings=get_app_settings(db))
+
+
+@bp.route('/settings/company', methods=('POST',))
+def settings_company():
+    """Company profile / PO branding: shown on the printed Purchase Order header."""
+    from .services import SETTING_DEFAULTS, save_app_settings
+
+    db = get_db()
+    save_app_settings(db, {key: request.form.get(key, '') for key in SETTING_DEFAULTS})
+    db.commit()
+    flash('Company profile saved. It appears on printed purchase orders.', 'success')
+    return redirect(url_for('auth.settings'))

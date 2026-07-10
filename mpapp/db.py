@@ -117,6 +117,11 @@ CREATE TABLE IF NOT EXISTS requirement_lines (
     -- used (e.g. {"gap_mm": 5}) so the requirement can be recomputed and audited.
     calc_method TEXT NOT NULL DEFAULT 'manual',
     calc_params TEXT,
+    -- purchase_qty: what the owner actually orders — deliberately more or less
+    -- than required_qty (site buffers etc). NULL = order the required qty.
+    -- purchase_notes: free-text context, e.g. "extra 15 units — Bangalore buffer".
+    purchase_qty REAL CHECK (purchase_qty IS NULL OR purchase_qty > 0),
+    purchase_notes TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -132,6 +137,9 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     status TEXT NOT NULL DEFAULT 'Draft'
         CHECK (status IN ('Draft', 'Issued', 'Partially Received', 'Received', 'Closed', 'Cancelled')),
     terms_notes TEXT,
+    -- Manually typed per PO (not auto-pulled from the project) — delivery
+    -- location varies per order.
+    delivery_address TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -145,6 +153,9 @@ CREATE TABLE IF NOT EXISTS po_lines (
     uom TEXT NOT NULL,
     rate REAL,
     requirement_line_id INTEGER REFERENCES requirement_lines(id),
+    -- Copied from the requirement line's purchase_notes at PO creation;
+    -- editable on the draft PO and shown on the printed document.
+    notes TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -227,6 +238,14 @@ CREATE TABLE IF NOT EXISTS drawing_products (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_drawing_products_project ON drawing_products(project_id);
+
+-- Key-value application settings (company profile / PO branding, editable in
+-- Settings). Missing keys fall back to defaults in services.get_app_settings.
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 # Seed catalog per PRD §7.4 / FR-C2: name, category, uom, supply_source, item_type.
@@ -279,6 +298,16 @@ def migrate_db(db):
         )
     if 'calc_params' not in req_cols:
         db.execute('ALTER TABLE requirement_lines ADD COLUMN calc_params TEXT')
+    if 'purchase_qty' not in req_cols:
+        db.execute('ALTER TABLE requirement_lines ADD COLUMN purchase_qty REAL')
+    if 'purchase_notes' not in req_cols:
+        db.execute('ALTER TABLE requirement_lines ADD COLUMN purchase_notes TEXT')
+    po_cols = _columns(db, 'purchase_orders')
+    if 'delivery_address' not in po_cols:
+        db.execute('ALTER TABLE purchase_orders ADD COLUMN delivery_address TEXT')
+    pol_cols = _columns(db, 'po_lines')
+    if 'notes' not in pol_cols:
+        db.execute('ALTER TABLE po_lines ADD COLUMN notes TEXT')
 
 
 def seed_db(db):

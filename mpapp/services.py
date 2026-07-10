@@ -279,3 +279,83 @@ def parse_number(value):
         return float(str(value).strip())
     except (TypeError, ValueError):
         return None
+
+
+# --- App settings (company profile / PO branding) -----------------------------
+
+SETTING_DEFAULTS = {
+    'company_name': 'Selective Systems',
+    'company_tagline': 'Authorised Tostem Partner · Aluminium Windows',
+    'company_address': '',
+    'company_gst': '',
+    'company_phone': '',
+    'company_email': '',
+    'po_terms': '',
+    'po_signatory': '',
+}
+
+
+def get_app_settings(db):
+    """Company profile / PO branding settings, with defaults for missing keys."""
+    stored = {
+        row['key']: row['value']
+        for row in db.execute('SELECT key, value FROM app_settings').fetchall()
+    }
+    return {key: stored.get(key, default) for key, default in SETTING_DEFAULTS.items()}
+
+
+def save_app_settings(db, values):
+    for key in SETTING_DEFAULTS:
+        if key in values:
+            db.execute(
+                'INSERT INTO app_settings (key, value) VALUES (?, ?)'
+                ' ON CONFLICT(key) DO UPDATE SET value = excluded.value,'
+                ' updated_at = CURRENT_TIMESTAMP',
+                (key, str(values[key]).strip()),
+            )
+
+
+# --- WhatsApp click-to-chat (pre-filled message; user sends manually) ---------
+
+def whatsapp_phone_digits(phone):
+    """Digits-only phone for wa.me. Returns None when unusable (too short)."""
+    digits = ''.join(ch for ch in str(phone or '') if ch.isdigit())
+    return digits if len(digits) >= 8 else None
+
+
+def build_po_whatsapp_message(settings, po, vendor, lines):
+    """Plain-text PO summary for the wa.me pre-filled message."""
+    from .filters import fmt_date, fmt_qty
+
+    out = [
+        f"*Purchase Order {po['po_number']}*",
+        settings.get('company_name', 'Selective Systems'),
+        f"Date: {fmt_date(po['order_date'])}",
+        f"Vendor: {vendor['name']}",
+        '',
+        'Items:',
+    ]
+    for i, line in enumerate(lines, start=1):
+        item = f"{i}. {line['material_name']} — {fmt_qty(line['qty'])} {line['uom']}"
+        if line['notes']:
+            item += f" ({line['notes']})"
+        out.append(item)
+    out.append('')
+    if po['delivery_address']:
+        out.append(f"Delivery address: {po['delivery_address']}")
+    if po['expected_delivery']:
+        out.append(f"Expected delivery: {fmt_date(po['expected_delivery'])}")
+    out.append('')
+    out.append('Please confirm availability and delivery date. Thank you.')
+    return '\n'.join(out)
+
+
+def build_po_whatsapp_link(settings, po, vendor, lines):
+    """wa.me click-to-chat URL, or None when the vendor has no usable phone."""
+    from urllib.parse import quote
+
+    digits = whatsapp_phone_digits(vendor['phone'])
+    if not digits:
+        return None
+    message = build_po_whatsapp_message(settings, po, vendor, lines)
+    return f'https://wa.me/{digits}?text={quote(message)}'

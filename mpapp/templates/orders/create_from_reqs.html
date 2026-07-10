@@ -47,14 +47,22 @@
     <div class="tbl-wrap">
       <table class="tbl">
         <thead>
-          <tr><th>Material</th><th class="num">Qty</th><th>UoM</th><th>Basis note</th></tr>
+          <tr><th>Material</th><th class="num">Required</th><th class="num">Order qty</th>
+              <th>UoM</th><th>Purchase notes</th><th>Basis note</th></tr>
         </thead>
         <tbody>
           {% for l in group['lines'] %}
           <tr>
             <td class="cell-strong">{{ l['material_name'] }}</td>
-            <td class="num">{{ l['required_qty'] | qty }}</td>
+            <td class="num cell-muted">{{ l['required_qty'] | qty }}</td>
+            <td class="num cell-strong">
+              {{ (l['purchase_qty'] if l['purchase_qty'] is not none else l['required_qty']) | qty }}
+              {% if l['purchase_qty'] is not none and l['purchase_qty'] != l['required_qty'] %}
+                <span class="hint" title="Manually set purchase qty">≠ req.</span>
+              {% endif %}
+            </td>
             <td class="cell-muted">{{ l['uom'] }}</td>
+            <td class="cell-note">{{ l['purchase_notes'] or '—' }}</td>
             <td class="cell-note">{{ l['basis_note'] or '—' }}</td>
           </tr>
           {% endfor %}

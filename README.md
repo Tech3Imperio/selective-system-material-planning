@@ -126,6 +126,32 @@ PDF parsing uses `pdfplumber` (added to requirements). Existing databases are
 migrated automatically on startup (new columns/tables added; PPE reclassified as
 Tools) — no manual migration step.
 
+## Purchase-order workflow extension
+
+- **Purchase Qty + Notes per requirement line** (Materials and Tools tabs):
+  the owner's deliberate order quantity, independent of Required Qty (buffers
+  for distant sites, trimming for nearby ones). Blank = order the required
+  amount. **Purchase Qty is what goes on the PO**; the note is carried onto the
+  PO line and the printed document. Editable on Approved lines too — approval
+  locks the requirement, not the later purchase decision.
+- **Branded PO template**: company name, tagline, address, GST, phone, email,
+  Terms & Conditions and authorised-signatory name are configurable under
+  **Settings → Company profile** (stored in the `app_settings` table). The logo
+  is a placeholder at `mpapp/static/logo-placeholder.svg` — replace that file
+  with the real logo. Each PO has a manually typed **delivery address** and
+  **expected delivery date**; the **PO date is stamped automatically at issue**;
+  numbering stays `SS-PO-YYYY-NNN` (sequential, resets each year).
+- **Send via WhatsApp**: on the PO detail/print pages, a click-to-chat link
+  (`wa.me/<vendor phone>?text=…`) opens WhatsApp with a formatted text version
+  of the PO pre-filled (vendor, number, date, line items, delivery address,
+  expected delivery) — the user reviews and hits send manually. No API
+  integration. Requires the vendor's phone with country code.
+- **Glass Sheet**: totals row (pieces + sqm) at the bottom of the table, and an
+  **Export Excel (.xlsx)** download of the processed sheet including the
+  manually entered Thickness / Glass Type / Colour per row — separate from the
+  original-PDF download, which is unchanged.
+- Delivery tracking is explicitly out of scope.
+
 ## UI
 
 The interface follows the Claude Design handoff (`design_handoff_material_planning`):

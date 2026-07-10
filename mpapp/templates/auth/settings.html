@@ -8,6 +8,59 @@
   </div>
 </div>
 
+<div class="card" style="max-width:640px">
+  <div class="card-header">
+    <h2 class="card-title">Company profile — printed on purchase orders</h2>
+  </div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('auth.settings_company') }}">
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">Company name</span>
+          <input type="text" name="company_name" value="{{ settings['company_name'] }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Tagline</span>
+          <input type="text" name="company_tagline" value="{{ settings['company_tagline'] }}">
+        </label>
+        <label class="field span-2">
+          <span class="field-label">Registered address</span>
+          <input type="text" name="company_address" value="{{ settings['company_address'] }}"
+                 placeholder="street, city, state, PIN">
+        </label>
+        <label class="field">
+          <span class="field-label">GST number</span>
+          <input type="text" name="company_gst" value="{{ settings['company_gst'] }}"
+                 placeholder="e.g. 27AAAAA0000A1Z5">
+        </label>
+        <label class="field">
+          <span class="field-label">Phone</span>
+          <input type="text" name="company_phone" value="{{ settings['company_phone'] }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Email</span>
+          <input type="text" name="company_email" value="{{ settings['company_email'] }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Authorised signatory name</span>
+          <input type="text" name="po_signatory" value="{{ settings['po_signatory'] }}"
+                 placeholder="printed above the signature line">
+        </label>
+        <label class="field span-2">
+          <span class="field-label">Terms &amp; Conditions (printed on every PO)</span>
+          <textarea name="po_terms" rows="4"
+                    placeholder="placeholder — paste the real policy text when ready">{{ settings['po_terms'] }}</textarea>
+        </label>
+      </div>
+      <div class="actions-row">
+        <button type="submit" class="btn btn-primary">Save company profile</button>
+        <span class="muted">The logo is a placeholder image
+          (<code>mpapp/static/logo-placeholder.svg</code>) — replace that file with the real logo.</span>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="card" style="max-width:480px">
   <div class="card-header"><h2 class="card-title">Change password</h2></div>
   <div class="card-body">

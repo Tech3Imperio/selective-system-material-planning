@@ -8,8 +8,9 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 
 from .db import get_db
 from .services import (
-    EPS, get_project_or_404, next_po_number, parse_number, parse_positive_number,
-    po_has_receipts, po_line_received_qty, refresh_po_status, tostem_po_error,
+    EPS, build_po_whatsapp_link, get_app_settings, get_project_or_404, next_po_number,
+    parse_number, parse_positive_number, po_has_receipts, po_line_received_qty,
+    refresh_po_status, tostem_po_error,
 )
 
 bp = Blueprint('orders', __name__)
@@ -158,10 +159,13 @@ def create(project_id):
         po_id = cur.lastrowid
         for raw_id in line_ids:
             rl = lines_by_id[int(raw_id)]
+            # Purchase Qty (the owner's deliberate order quantity) drives the PO;
+            # fall back to the required qty when no purchase qty was entered.
+            order_qty = rl['purchase_qty'] if rl['purchase_qty'] is not None else rl['required_qty']
             db.execute(
-                'INSERT INTO po_lines (po_id, material_id, qty, uom, requirement_line_id)'
-                ' VALUES (?, ?, ?, ?, ?)',
-                (po_id, rl['material_id'], rl['required_qty'], rl['uom'], rl['id']),
+                'INSERT INTO po_lines (po_id, material_id, qty, uom, requirement_line_id, notes)'
+                ' VALUES (?, ?, ?, ?, ?, ?)',
+                (po_id, rl['material_id'], order_qty, rl['uom'], rl['id'], rl['purchase_notes']),
             )
         created.append((po_id, po_number))
     db.commit()
@@ -224,10 +228,14 @@ def detail(po_id):
     ).fetchall()
     has_rates = any(l['rate'] is not None for l in lines)
     total = sum(l['amount'] for l in lines if l['amount'] is not None) if has_rates else None
+    vendor = db.execute('SELECT * FROM vendors WHERE id = ?', (po['vendor_id'],)).fetchone()
+    settings = get_app_settings(db)
     return render_template(
         'orders/detail.html',
         po=po, lines=lines, vendors=_active_vendors(db), materials=materials,
         has_rates=has_rates, total=total, has_receipts=po_has_receipts(db, po_id),
+        wa_link=build_po_whatsapp_link(settings, po, vendor, lines),
+        vendor_has_phone=bool(vendor['phone'] and vendor['phone'].strip()),
     )
 
 
@@ -247,6 +255,7 @@ def update(po_id):
         order_date = request.form.get('order_date', '').strip() or po['order_date']
         expected = request.form.get('expected_delivery', '').strip() or None
         terms = request.form.get('terms_notes', '').strip()
+        delivery_address = request.form.get('delivery_address', '').strip()
         if not vendor_raw.isdigit() or db.execute(
             'SELECT 1 FROM vendors WHERE id = ?', (int(vendor_raw),)
         ).fetchone() is None:
@@ -254,8 +263,8 @@ def update(po_id):
         else:
             db.execute(
                 'UPDATE purchase_orders SET vendor_id = ?, order_date = ?, expected_delivery = ?,'
-                ' terms_notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                (int(vendor_raw), order_date, expected, terms, po_id),
+                ' terms_notes = ?, delivery_address = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                (int(vendor_raw), order_date, expected, terms, delivery_address or None, po_id),
             )
             db.commit()
             flash('Purchase order updated.', 'success')
@@ -285,9 +294,11 @@ def add_line(po_id):
         elif rate is not None and rate < 0:
             flash('Rate cannot be negative.', 'error')
         else:
+            notes = request.form.get('notes', '').strip() or None
             db.execute(
-                'INSERT INTO po_lines (po_id, material_id, qty, uom, rate) VALUES (?, ?, ?, ?, ?)',
-                (po_id, material['id'], qty, material['uom'], rate),
+                'INSERT INTO po_lines (po_id, material_id, qty, uom, rate, notes)'
+                ' VALUES (?, ?, ?, ?, ?, ?)',
+                (po_id, material['id'], qty, material['uom'], rate, notes),
             )
             db.commit()
             flash('Line added.', 'success')
@@ -312,9 +323,11 @@ def update_line(po_id, line_id):
         elif rate_raw and (rate is None or rate < 0):
             flash('Rate must be a non-negative number.', 'error')
         else:
+            notes = request.form.get('notes', '').strip() or None
             db.execute(
-                'UPDATE po_lines SET qty = ?, rate = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                (qty, rate, line_id),
+                'UPDATE po_lines SET qty = ?, rate = ?, notes = ?,'
+                ' updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                (qty, rate, notes, line_id),
             )
             db.commit()
             flash('Line updated.', 'success')
@@ -344,9 +357,11 @@ def issue(po_id):
     elif line_count == 0:
         flash('Add at least one line before issuing.', 'error')
     else:
+        # The PO date is the date of issue: stamp it now, then lock the record.
         db.execute(
-            "UPDATE purchase_orders SET status = 'Issued', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (po_id,),
+            "UPDATE purchase_orders SET status = 'Issued', order_date = ?,"
+            ' updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            (date.today().isoformat(), po_id),
         )
         db.commit()
         flash(f"PO {po['po_number']} issued. It is now locked; record receipts against it.", 'success')
@@ -470,7 +485,9 @@ def print_po(po_id):
     lines = _po_lines(db, po_id)
     has_rates = any(l['rate'] is not None for l in lines)
     total = sum(l['amount'] for l in lines if l['amount'] is not None) if has_rates else None
+    settings = get_app_settings(db)
     return render_template(
         'orders/print.html', po=po, vendor=vendor, lines=lines,
-        has_rates=has_rates, total=total,
+        has_rates=has_rates, total=total, settings=settings,
+        wa_link=build_po_whatsapp_link(settings, po, vendor, lines),
     )

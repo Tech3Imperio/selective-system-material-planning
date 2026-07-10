@@ -173,6 +173,65 @@ def delete_sheet(project_id, sheet_id):
     return redirect(url_for('glass.sheet', project_id=project_id))
 
 
+@bp.route('/export.xlsx')
+def export_xlsx(project_id):
+    """Export the processed Glass Sheet — parsed sizes/qtys PLUS the manually
+    entered thickness/type/colour — as an Excel file. Distinct from the original
+    drawing-sheet PDF download, which stays untouched."""
+    import io
+
+    import openpyxl
+    from openpyxl.styles import Font
+
+    db = get_db()
+    project = get_project_or_404(project_id)
+    lines = db.execute(
+        'SELECT * FROM glass_lines WHERE project_id = ? ORDER BY page_no, id',
+        (project_id,),
+    ).fetchall()
+    if not lines:
+        flash('No glass lines to export yet — upload a drawing sheet first.', 'error')
+        return redirect(url_for('glass.sheet', project_id=project_id))
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Glass Sheet'
+    headers = ['Reference Code', 'Glass Width (mm)', 'Glass Height (mm)', 'Qty',
+               'Thickness', 'Glass Type', 'Colour', 'Area (sqm)']
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+    total_qty = 0
+    total_sqm = 0.0
+    for l in lines:
+        area = (l['glass_width'] * l['glass_height'] * l['qty']) / 1_000_000
+        total_qty += l['qty']
+        total_sqm += area
+        ws.append([
+            l['ref_code'], l['glass_width'], l['glass_height'], l['qty'],
+            l['thickness'] or '', l['glass_type'] or '', l['glass_color'] or '',
+            round(area, 3),
+        ])
+    ws.append([])
+    total_row = ['TOTAL', '', '', total_qty, '', '', '', round(total_sqm, 2)]
+    ws.append(total_row)
+    for cell in ws[ws.max_row]:
+        cell.font = Font(bold=True)
+    widths = [22, 16, 16, 8, 20, 18, 14, 12]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    safe_name = ''.join(c if c.isalnum() or c in ' -_' else '_' for c in project['name'])
+    return send_file(
+        buf, as_attachment=True,
+        download_name=f'glass-sheet-{safe_name}.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+
+
 @bp.route('/sheet/<int:sheet_id>/download')
 def download_sheet(project_id, sheet_id):
     db = get_db()

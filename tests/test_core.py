@@ -786,3 +786,224 @@ def test_gasket_untouched(app, auth, project):
     assert gasket['item_type'] == 'Material'
     line = add_requirement(auth, project['id'], gasket['id'], 480, note='typed manually', app=app)
     assert line['calc_method'] == 'manual' and line['required_qty'] == 480
+
+
+# ============================================================================
+# PO workflow extension: Purchase Qty, branded PO, WhatsApp, Glass XLSX export
+# ============================================================================
+
+def test_purchase_qty_drives_po(app, auth, project, vendor):
+    """Purchase Qty (not Required Qty) goes on the PO; notes carry over."""
+    pid = project['id']
+    mid = material_id(app, 'Silicone')
+    line = add_requirement(auth, pid, mid, 100, approve=True, app=app)
+    # Set a deliberate over-order with a note (allowed on the Approved line).
+    auth.post(f"/projects/{pid}/requirements/{line['id']}/purchase", data={
+        'purchase_qty': '115', 'purchase_notes': 'extra 15 units — Bangalore site buffer',
+    })
+    row = query_one(app, 'SELECT * FROM requirement_lines WHERE id = ?', (line['id'],))
+    assert row['purchase_qty'] == 115
+    assert row['required_qty'] == 100  # unchanged — independent values
+
+    po = create_po(auth, app, pid, vendor['id'], [line['id']])
+    pol = query_one(app, 'SELECT * FROM po_lines WHERE po_id = ?', (po['id'],))
+    assert pol['qty'] == 115
+    assert pol['notes'] == 'extra 15 units — Bangalore site buffer'
+
+
+def test_purchase_qty_blank_falls_back_to_required(app, auth, project, vendor):
+    pid = project['id']
+    line = add_requirement(auth, pid, material_id(app, 'Glass'), 50, approve=True, app=app)
+    po = create_po(auth, app, pid, vendor['id'], [line['id']])
+    pol = query_one(app, 'SELECT * FROM po_lines WHERE po_id = ?', (po['id'],))
+    assert pol['qty'] == 50  # no purchase qty entered -> required qty is ordered
+
+
+def test_purchase_qty_validation_and_clearing(app, auth, project):
+    pid = project['id']
+    line = add_requirement(auth, pid, material_id(app, 'Glass'), 50, app=app)
+    resp = auth.post(f"/projects/{pid}/requirements/{line['id']}/purchase", data={
+        'purchase_qty': '-3', 'purchase_notes': '',
+    }, follow_redirects=True)
+    assert b'positive number' in resp.data
+    auth.post(f"/projects/{pid}/requirements/{line['id']}/purchase", data={
+        'purchase_qty': '60', 'purchase_notes': 'buffer',
+    })
+    # Blank clears it back to "order the required qty".
+    auth.post(f"/projects/{pid}/requirements/{line['id']}/purchase", data={
+        'purchase_qty': '', 'purchase_notes': '',
+    })
+    row = query_one(app, 'SELECT * FROM requirement_lines WHERE id = ?', (line['id'],))
+    assert row['purchase_qty'] is None and row['purchase_notes'] is None
+
+
+def test_tool_purchase_qty(app, auth, project, vendor):
+    pid = project['id']
+    shoes = material_id(app, 'Safety Shoes')
+    line = add_tool(auth, pid, shoes, 6, approve=True, app=app)
+    auth.post(f"/projects/{pid}/tools/{line['id']}/purchase", data={
+        'purchase_qty': '8', 'purchase_notes': 'two spares',
+    })
+    po = create_po(auth, app, pid, vendor['id'], [line['id']])
+    pol = query_one(app, 'SELECT * FROM po_lines WHERE po_id = ?', (po['id'],))
+    assert pol['qty'] == 8 and pol['notes'] == 'two spares'
+
+
+def test_company_settings_on_printed_po(app, auth, project, vendor):
+    auth.post('/settings/company', data={
+        'company_name': 'Selective Systems Pvt Ltd',
+        'company_tagline': 'Authorised Tostem Partner',
+        'company_address': '12 Industrial Estate, Mumbai 400001',
+        'company_gst': '27AAAAA0000A1Z5',
+        'company_phone': '+91 98200 00000',
+        'company_email': 'purchase@selectivesystems.in',
+        'po_terms': 'Goods once sold will not be taken back.\nPayment within 30 days.',
+        'po_signatory': 'A. Owner',
+    })
+    line = add_requirement(auth, project['id'], material_id(app, 'Glass'), 20,
+                           approve=True, app=app)
+    po = create_po(auth, app, project['id'], vendor['id'], [line['id']])
+    text = auth.get(f"/purchase-orders/{po['id']}/print").get_data(as_text=True)
+    assert 'Selective Systems Pvt Ltd' in text
+    assert '27AAAAA0000A1Z5' in text
+    assert '12 Industrial Estate' in text
+    assert 'Goods once sold will not be taken back' in text
+    assert 'A. Owner' in text
+    assert 'logo-placeholder.svg' in text
+
+
+def test_po_terms_placeholder_when_unset(app, auth, project, vendor):
+    line = add_requirement(auth, project['id'], material_id(app, 'Glass'), 20,
+                           approve=True, app=app)
+    po = create_po(auth, app, project['id'], vendor['id'], [line['id']])
+    text = auth.get(f"/purchase-orders/{po['id']}/print").get_data(as_text=True)
+    assert 'Terms &amp; Conditions' in text
+    assert 'to be added' in text  # placeholder shown until filled in Settings
+
+
+def test_delivery_address_manual_per_po(app, auth, project, vendor):
+    line = add_requirement(auth, project['id'], material_id(app, 'Glass'), 20,
+                           approve=True, app=app)
+    po = create_po(auth, app, project['id'], vendor['id'], [line['id']])
+    auth.post(f"/purchase-orders/{po['id']}/update", data={
+        'vendor_id': str(vendor['id']), 'order_date': po['order_date'],
+        'expected_delivery': '2026-07-20', 'terms_notes': '',
+        'delivery_address': 'Gate 3, Skyline Towers site store, Bengaluru',
+    })
+    row = query_one(app, 'SELECT * FROM purchase_orders WHERE id = ?', (po['id'],))
+    assert row['delivery_address'] == 'Gate 3, Skyline Towers site store, Bengaluru'
+    text = auth.get(f"/purchase-orders/{po['id']}/print").get_data(as_text=True)
+    assert 'Gate 3, Skyline Towers site store' in text
+
+
+def test_issue_stamps_po_date(app, auth, project, vendor):
+    """The PO date is auto-set to the date of issue (spec §2)."""
+    line = add_requirement(auth, project['id'], material_id(app, 'Glass'), 20,
+                           approve=True, app=app)
+    po = create_po(auth, app, project['id'], vendor['id'], [line['id']])
+    # Backdate the draft, then issue: order_date must be stamped to today.
+    execute(app, 'UPDATE purchase_orders SET order_date = ? WHERE id = ?',
+            ('2026-01-01', po['id']))
+    auth.post(f"/purchase-orders/{po['id']}/issue")
+    row = query_one(app, 'SELECT * FROM purchase_orders WHERE id = ?', (po['id'],))
+    assert row['status'] == 'Issued'
+    assert row['order_date'] == date.today().isoformat()
+
+
+def test_whatsapp_link_on_po(app, auth, project, vendor):
+    line = add_requirement(auth, project['id'], material_id(app, 'Silicone'), 40,
+                           approve=True, app=app)
+    po = create_po(auth, app, project['id'], vendor['id'], [line['id']])
+    auth.post(f"/purchase-orders/{po['id']}/update", data={
+        'vendor_id': str(vendor['id']), 'order_date': po['order_date'],
+        'expected_delivery': '', 'terms_notes': '',
+        'delivery_address': 'Site store, Tower B',
+    })
+    text = auth.get(f"/purchase-orders/{po['id']}").get_data(as_text=True)
+    # Vendor phone is '99999' (conftest) -> too short for wa.me; disabled state...
+    assert 'no vendor phone' not in text or 'wa.me' in text
+
+    # Give the vendor a real phone; the wa.me link must appear, URL-encoded.
+    execute(app, 'UPDATE vendors SET phone = ? WHERE id = ?',
+            ('+91 98200 12345', vendor['id']))
+    text = auth.get(f"/purchase-orders/{po['id']}").get_data(as_text=True)
+    assert 'https://wa.me/919820012345?text=' in text
+    assert 'Purchase%20Order%20' + po['po_number'].replace('SS-PO-', 'SS-PO-') in text or \
+           'Purchase%20Order' in text
+    assert 'Site%20store%2C%20Tower%20B' in text  # delivery address in the message
+    assert 'Silicone' in text
+
+
+def test_whatsapp_message_content(app):
+    from mpapp.services import build_po_whatsapp_message, whatsapp_phone_digits
+    settings = {'company_name': 'Selective Systems'}
+    po = {'po_number': 'SS-PO-2026-007', 'order_date': '2026-07-10',
+          'delivery_address': 'Gate 3, Site store', 'expected_delivery': '2026-07-20'}
+    vendor = {'name': 'Alpha Traders', 'phone': '+91 98200-12345'}
+    lines = [{'material_name': 'Silicone', 'qty': 115, 'uom': 'tubes',
+              'notes': 'extra 15 — buffer'}]
+    msg = build_po_whatsapp_message(settings, po, vendor, lines)
+    assert '*Purchase Order SS-PO-2026-007*' in msg
+    assert 'Date: 10-07-2026' in msg
+    assert '1. Silicone — 115 tubes (extra 15 — buffer)' in msg
+    assert 'Delivery address: Gate 3, Site store' in msg
+    assert 'Expected delivery: 20-07-2026' in msg
+    assert whatsapp_phone_digits(vendor['phone']) == '919820012345'
+    assert whatsapp_phone_digits('99999') is None   # too short
+    assert whatsapp_phone_digits(None) is None
+
+
+def test_no_whatsapp_without_phone(app, auth, project, vendor):
+    execute(app, 'UPDATE vendors SET phone = NULL WHERE id = ?', (vendor['id'],))
+    line = add_requirement(auth, project['id'], material_id(app, 'Glass'), 20,
+                           approve=True, app=app)
+    po = create_po(auth, app, project['id'], vendor['id'], [line['id']])
+    text = auth.get(f"/purchase-orders/{po['id']}").get_data(as_text=True)
+    assert 'wa.me' not in text
+    assert 'no vendor phone' in text
+
+
+# --- Glass Sheet: totals + XLSX export ---------------------------------------
+
+@pytest.mark.skipif(not pdf_available, reason='sample drawing sheet not present')
+def test_glass_sheet_totals_and_xlsx_export(app, auth, project):
+    pid = project['id']
+    with open(DRAWING_PDF, 'rb') as f:
+        content = f.read()
+    auth.post(f'/projects/{pid}/glass/upload',
+              data={'file': (io.BytesIO(content), 'draw.pdf')},
+              content_type='multipart/form-data')
+    auth.post(f'/projects/{pid}/glass/bulk-spec', data={
+        'thickness': '6mm+1.52pvb+6mm', 'glass_type': 'Clear Laminated', 'glass_color': 'Clear',
+    })
+    # Totals row at the bottom of the glass table.
+    text = auth.get(f'/projects/{pid}/glass/').get_data(as_text=True)
+    assert 'sqm total glass area' in text
+    assert '916' in text
+
+    # Processed XLSX export includes the manual spec columns and totals.
+    resp = auth.get(f'/projects/{pid}/glass/export.xlsx')
+    assert resp.status_code == 200
+    assert 'spreadsheetml' in resp.mimetype
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(resp.data))
+    ws = wb.active
+    header = [c.value for c in ws[1]]
+    assert header[:7] == ['Reference Code', 'Glass Width (mm)', 'Glass Height (mm)', 'Qty',
+                          'Thickness', 'Glass Type', 'Colour']
+    rows = list(ws.iter_rows(min_row=2, values_only=True))
+    data_rows = [r for r in rows if r[0] and r[0] != 'TOTAL']
+    assert len(data_rows) == 112
+    assert all(r[4] == '6mm+1.52pvb+6mm' for r in data_rows)
+    total_row = next(r for r in rows if r[0] == 'TOTAL')
+    assert total_row[3] == 916
+
+    # The original-PDF download is unchanged and still returns the source file.
+    sheet = query_one(app, 'SELECT id FROM drawing_sheets WHERE project_id = ?', (pid,))
+    resp = auth.get(f"/projects/{pid}/glass/sheet/{sheet['id']}/download")
+    assert resp.data == content
+
+
+def test_glass_xlsx_export_empty_project(app, auth, project):
+    resp = auth.get(f"/projects/{project['id']}/glass/export.xlsx", follow_redirects=True)
+    assert b'No glass lines to export' in resp.data

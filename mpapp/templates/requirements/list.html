@@ -22,7 +22,8 @@
       <thead>
         <tr>
           <th class="no-print" style="width:36px">Select</th>
-          <th>Material</th><th>Mode</th><th class="num">Required qty</th><th>UoM</th>
+          <th>Material</th><th>Mode</th><th class="num">Required qty</th>
+          <th class="num">Purchase qty</th><th>Purchase notes</th><th>UoM</th>
           <th>Basis / formula</th><th>Status</th><th class="num">On PO</th>
           <th class="no-print" style="width:120px"></th>
         </tr>
@@ -43,6 +44,18 @@
           <td>{{ badge('auto' if auto else 'manual', 'Auto' if auto else 'Manual') }}</td>
           <td class="num {{ 'qty-auto' if auto else 'cell-strong' }}">
             {% if auto %}{{ icon('settings', 11) }}{% endif %}{{ l['required_qty'] | qty }}
+          </td>
+          <td class="num">
+            <input type="text" name="purchase_qty" form="pq-{{ l['id'] }}" inputmode="decimal"
+                   class="cell-input num" style="width:72px" placeholder="= req."
+                   value="{{ l['purchase_qty'] | qty if l['purchase_qty'] is not none else '' }}">
+          </td>
+          <td>
+            <input type="text" name="purchase_notes" form="pq-{{ l['id'] }}"
+                   class="cell-input" style="width:170px" placeholder="e.g. extra 15 — site buffer"
+                   value="{{ l['purchase_notes'] or '' }}">
+            <button type="submit" form="pq-{{ l['id'] }}" class="btn btn-ghost btn-xs no-print"
+                    title="Save purchase qty & notes">Save</button>
           </td>
           <td class="cell-muted">{{ l['uom'] }}</td>
           <td class="cell-note">{{ l['basis_note'] or '—' }}</td>
@@ -68,18 +81,25 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="9" class="cell-muted">No material requirement lines yet — add one below.</td></tr>
+        <tr><td colspan="11" class="cell-muted">No material requirement lines yet — add one below.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   <div class="tbl-foot">
-    <span>Select approved lines and use “Create PO from approved” — grouped by default vendor.
-      Tostem-supplied lines cannot go on a PO (FR-O2).</span>
+    <span><strong>Purchase qty</strong> (not Required qty) is what goes on the PO — leave it blank to
+      order exactly the required amount. Select approved lines and use “Create PO from approved” —
+      grouped by default vendor. Tostem-supplied lines cannot go on a PO (FR-O2).</span>
     <span>{{ lines | length }} lines</span>
   </div>
 </div>
 </form>
+
+{# Per-row purchase-qty forms (outside the PO form; inputs bind via the form attribute). #}
+{% for l in lines %}
+<form method="post" id="pq-{{ l['id'] }}" class="inline"
+      action="{{ url_for('requirements.update_purchase', project_id=project['id'], line_id=l['id']) }}"></form>
+{% endfor %}
 
 {# Add a manual requirement line #}
 <div class="card mt-16 no-print">

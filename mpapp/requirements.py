@@ -291,6 +291,39 @@ def delete(project_id, line_id):
     return redirect(url_for('requirements.list_requirements', project_id=project_id))
 
 
+@bp.route('/<int:line_id>/purchase', methods=('POST',))
+def update_purchase(project_id, line_id):
+    """Set the manual Purchase Qty + Notes for a line (independent of Required Qty).
+
+    Deliberately allowed on Approved lines too: approval locks the *requirement*
+    (material + required qty); the purchase decision is made afterwards, right
+    before POs are raised, and may differ per site (buffers, nearby stores).
+    """
+    db = get_db()
+    get_project_or_404(project_id)
+    line = _get_line_or_404(db, project_id, line_id)
+    raw_qty = request.form.get('purchase_qty', '').strip()
+    notes = request.form.get('purchase_notes', '').strip()
+    if raw_qty:
+        qty = parse_positive_number(raw_qty)
+        if qty is None:
+            flash('Purchase quantity must be a positive number (or blank to order the required qty).',
+                  'error')
+            return redirect(request.form.get('next') or
+                            url_for('requirements.list_requirements', project_id=project_id))
+    else:
+        qty = None
+    db.execute(
+        'UPDATE requirement_lines SET purchase_qty = ?, purchase_notes = ?,'
+        ' updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        (qty, notes or None, line_id),
+    )
+    db.commit()
+    flash('Purchase quantity saved.', 'success')
+    return redirect(request.form.get('next') or
+                    url_for('requirements.list_requirements', project_id=project_id))
+
+
 @bp.route('/<int:line_id>/approve', methods=('POST',))
 def approve(project_id, line_id):
     db = get_db()

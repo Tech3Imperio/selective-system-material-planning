@@ -11,6 +11,9 @@
   </div>
   {% if lines %}
   <div class="page-actions no-print">
+    <a class="btn" href="{{ url_for('glass.export_xlsx', project_id=project['id']) }}"
+       title="Processed glass sheet with the manually entered thickness / type / colour per row">
+      {{ icon('download', 14) }}Export Excel (.xlsx)</a>
     <a class="btn btn-primary" href="#upload">{{ icon('upload', 14) }}Replace / add PDF</a>
   </div>
   {% endif %}
@@ -183,6 +186,15 @@
         </tr>
         {% endfor %}
       </tbody>
+      <tfoot>
+        <tr class="total">
+          <td>Total — {{ lines | length }} references</td>
+          <td></td><td></td>
+          <td class="num">{{ total_qty }}</td>
+          <td colspan="5">pieces · {{ '%.2f' | format(ns.sqm) }} sqm total glass area</td>
+          <td class="no-print"></td>
+        </tr>
+      </tfoot>
     </table>
   </div>
   <div class="tbl-foot">

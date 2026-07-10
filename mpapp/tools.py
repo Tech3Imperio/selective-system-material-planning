@@ -132,6 +132,33 @@ def delete(project_id, line_id):
     return redirect(url_for('tools.list_tools', project_id=project_id))
 
 
+@bp.route('/<int:line_id>/purchase', methods=('POST',))
+def update_purchase(project_id, line_id):
+    """Purchase Qty + Notes for a tool line — same semantics as Materials:
+    independent of the required qty, editable on Approved lines too."""
+    db = get_db()
+    get_project_or_404(project_id)
+    _get_line_or_404(db, project_id, line_id)
+    raw_qty = request.form.get('purchase_qty', '').strip()
+    notes = request.form.get('purchase_notes', '').strip()
+    if raw_qty:
+        qty = parse_positive_number(raw_qty)
+        if qty is None:
+            flash('Purchase quantity must be a positive number (or blank to order the required qty).',
+                  'error')
+            return redirect(url_for('tools.list_tools', project_id=project_id))
+    else:
+        qty = None
+    db.execute(
+        'UPDATE requirement_lines SET purchase_qty = ?, purchase_notes = ?,'
+        ' updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        (qty, notes or None, line_id),
+    )
+    db.commit()
+    flash('Purchase quantity saved.', 'success')
+    return redirect(url_for('tools.list_tools', project_id=project_id))
+
+
 @bp.route('/<int:line_id>/approve', methods=('POST',))
 def approve(project_id, line_id):
     db = get_db()
